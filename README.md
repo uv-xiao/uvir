@@ -10,6 +10,17 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
 - **Structured Control Flow**: Focus on high-level structured constructs (no CFG/branches)
 - **Interoperability**: Compatible with MLIR textual format and egg rewrite system
 
+## Progress
+
+- [x] Core Infrastructure: String interning, type system with type erasure, operation infrastructure with static dispatch.
+- [x] Memory Management: Efficient slotmap-based storage for regions, values, and operations
+- [x] Type System: Type interning with support for builtin types (integer, float, function) and dialect-specific types
+- [x] Operation System: Registry-based operation management with static dispatch
+- [x] Attribute System: Flexible attribute storage supporting both builtin and dialect-specific attributes
+- [x] Dialect Support: Basic arithmetic dialect with constant, add, and multiply operations
+- [x] Testing: Basic tests verifying core functionality
+- [ ] Parse/print: Basic parse/print functionality with MLIR compatible grammar.
+
 ## Core Infrastructure
 
 <details>
@@ -477,28 +488,6 @@ uvir/
 ├── examples/
 └── Cargo.toml
 ```
-
-### Key Dependencies
-
-```toml
-[dependencies]
-slotmap = "1.0"        # Efficient storage
-smallvec = "1.11"      # Small buffer optimization  
-inventory = "0.3"      # Static registration
-bitset = "0.1"         # Efficient bit operations
-ahash = "0.8"          # Fast hashing
-
-[dev-dependencies]
-egg = "0.9"            # Rewrite system integration
-```
-
-### Performance Considerations
-
-1. **Memory Layout**: Use `repr(C)` for predictable layouts when needed
-2. **Arena Allocation**: Consider using typed arenas for operations
-3. **String Interning**: Intern all identifiers for fast comparison
-4. **Small Buffer Optimization**: Use `SmallVec` for common small collections
-5. **Type Erasure**: Minimize virtual calls, prefer static dispatch
 
 ### Example: Creating a Simple Arithmetic Dialect
 

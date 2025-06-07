@@ -2,7 +2,6 @@ use uvir::{Context, Value};
 use uvir::dialects::arith::{ConstantOp, AddOp};
 use uvir::dialects::builtin::{integer_type};
 use uvir::attribute::Attribute;
-use uvir::ops::Op;
 
 #[test]
 fn test_basic_operations() {

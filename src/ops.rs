@@ -8,6 +8,9 @@ use crate::attribute::AttributeMap;
 use smallvec::SmallVec;
 use slotmap::new_key_type;
 
+// Inventory collection for automatic operation registration
+inventory::collect!(&'static OpInfo);
+
 new_key_type! {
     pub struct Val;
     pub struct Opr;
@@ -117,7 +120,14 @@ impl OpRegistry {
     }
 
     pub fn register_builtin_ops(&mut self, string_interner: &mut crate::string_interner::StringInterner) {
-        // Register ops from dialects manually
+        // Register all operations collected by inventory
+        for info in inventory::iter::<&'static OpInfo> {
+            let dialect = string_interner.intern(info.dialect);
+            let name = string_interner.intern(info.name);
+            self.register(dialect, name, *info);
+        }
+        
+        // Also register manually defined ops
         use crate::dialects::arith::{ConstantOp, AddOp, MulOp};
         
         for info in &[ConstantOp::INFO, AddOp::INFO, MulOp::INFO] {
@@ -135,10 +145,7 @@ impl Default for OpRegistry {
 }
 
 pub trait Op: Sized + 'static {
-    const INFO: &'static OpInfo;
-    
-    fn into_op_data(self, ctx: &mut crate::Context) -> OpData;
-    fn from_op_data(op: &OpData) -> Option<&Self>;
+    fn info(&self) -> &'static OpInfo;
 }
 
 // Removed register_op! macro since we're not using inventory anymore

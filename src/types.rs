@@ -69,7 +69,7 @@ impl TypeStorage {
 impl Clone for TypeStorage {
     fn clone(&self) -> Self {
         Self {
-            data: self.data.clone(),
+            data: (self.vtable.clone)(&self.data),
             vtable: self.vtable,
         }
     }

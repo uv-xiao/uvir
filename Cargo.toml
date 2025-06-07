@@ -1,13 +1,18 @@
+[workspace]
+members = [".", "uvir-macros"]
+
 [package]
 name = "uvir"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+uvir-macros = { path = "uvir-macros" }
 slotmap = "1.0"
 smallvec = "1.11"
 ahash = "0.8"
 thiserror = "1.0"
+inventory = "0.3"
 
 [dev-dependencies]
 egg = "0.9"

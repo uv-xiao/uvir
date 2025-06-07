@@ -1,4 +1,6 @@
 use crate::ops::{OpData, Opr, Val, Value};
+use crate::types::TypeId;
+use crate::string_interner::StringId;
 use slotmap::{SlotMap, new_key_type};
 
 new_key_type! {
@@ -67,6 +69,21 @@ impl Region {
             })
             .collect()
     }
+
+    // Create a new value in this region
+    pub fn create_value(&mut self, name: Option<StringId>, ty: TypeId) -> Val {
+        let value = Value {
+            name,
+            ty,
+            defining_op: None,
+        };
+        self.add_value(value)
+    }
+
+    // Add an operation to this region
+    pub fn add_operation(&mut self, op: OpData) -> Opr {
+        self.add_op(op)
+    }
 }
 
 impl Default for Region {
@@ -76,7 +93,7 @@ impl Default for Region {
 }
 
 pub struct RegionManager {
-    regions: SlotMap<RegionId, Region>,
+    pub regions: SlotMap<RegionId, Region>,
 }
 
 impl RegionManager {

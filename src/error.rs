@@ -17,6 +17,9 @@ pub enum Error {
     #[error("Not found: {0}")]
     NotFound(String),
     
+    #[error("Invalid region: {0}")]
+    InvalidRegion(String),
+    
     #[error("Internal error: {0}")]
     InternalError(String),
 }
