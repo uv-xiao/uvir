@@ -2,13 +2,20 @@
 
 A Rust library for creating new intermediate representations (IR) for DSLs, inspired by MLIR's design principles. 
 
-## Design Goals
+## TODO
 
-- **Type Safety**: Leverage Rust's type system for compile-time guarantees
-- **Performance**: Minimize allocations and dynamic dispatch overhead  
-- **Extensibility**: Easy to add new operations, types, and dialects
-- **Structured Control Flow**: Focus on high-level structured constructs (no CFG/branches)
-- **Interoperability**: Compatible with MLIR textual format and egg rewrite system
+1. Parse/print is not fully MLIR-compatible. 
+   - Refer to https://mlir.llvm.org/docs/LangRef/ for the grammar except Block and Branch operations. Summarize the grammar in GRAMMAR.md.
+   - For printer_test, rewrite assertions to strictly compare the output with the expected one in MLIR format.
+   - For parser_test, add a test with a MLIR snippet to parse.
+   - Fix the parser and printer to pass the test.
+2. Derive-based operation definition is not tested. 
+   - Add a test for it.
+   - Fix the implementation to pass the test.
+   - Use it for dialects.
+3. Operation check is not tested.
+4. Finish the pass system and test it. 
+5. Add a test for the pass system.
 
 ## Progress
 

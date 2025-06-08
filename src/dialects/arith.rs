@@ -29,17 +29,9 @@ pub const CONSTANT_OP_INFO: &OpInfo = &OpInfo {
     parse: |_parser| {
         todo!("Implement constant op parsing")
     },
-    print: |op, printer| {
-        if let Some(constant) = ConstantOp::from_op_data(op) {
-            printer.print("%")?;
-            printer.print(&format!("{:?}", constant.result))?;
-            printer.print(" = arith.constant ")?;
-            match &constant.value {
-                Attribute::Integer(i) => printer.print(&format!("{}", i))?,
-                Attribute::Float(f) => printer.print(&format!("{}", f))?,
-                _ => printer.print(&format!("{:?}", constant.value))?,
-            }
-        }
+    print: |_op, _printer| {
+        // Use generic printing - the custom print is handled by the main printer
+        // We can add custom formatting here if needed, but for now generic is fine
         Ok(())
     },
 };
@@ -104,15 +96,8 @@ pub const ADD_OP_INFO: &OpInfo = &OpInfo {
     parse: |_parser| {
         todo!("Implement add op parsing")
     },
-    print: |op, printer| {
-        if let Some(add) = AddOp::from_op_data(op) {
-            printer.print("%")?;
-            printer.print(&format!("{:?}", add.result))?;
-            printer.print(" = arith.addi %")?;
-            printer.print(&format!("{:?}", add.lhs))?;
-            printer.print(", %")?;
-            printer.print(&format!("{:?}", add.rhs))?;
-        }
+    print: |_op, _printer| {
+        // Use generic printing - the custom print is handled by the main printer
         Ok(())
     },
 };
@@ -175,15 +160,8 @@ pub const MUL_OP_INFO: &OpInfo = &OpInfo {
     parse: |_parser| {
         todo!("Implement mul op parsing")
     },
-    print: |op, printer| {
-        if let Some(mul) = MulOp::from_op_data(op) {
-            printer.print("%")?;
-            printer.print(&format!("{:?}", mul.result))?;
-            printer.print(" = arith.muli %")?;
-            printer.print(&format!("{:?}", mul.lhs))?;
-            printer.print(", %")?;
-            printer.print(&format!("{:?}", mul.rhs))?;
-        }
+    print: |_op, _printer| {
+        // Use generic printing - the custom print is handled by the main printer
         Ok(())
     },
 };

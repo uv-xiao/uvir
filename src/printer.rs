@@ -58,9 +58,30 @@ impl Printer {
     }
 
     // Print a value reference like %0, %arg0
-    pub fn print_value(&mut self, val: Val) -> Result<()> {
-        write!(&mut self.output, "%{:?}", val)
-            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+    pub fn print_value(&mut self, ctx: &Context, val: Val) -> Result<()> {
+        if let Some(region) = ctx.get_region(ctx.global_region()) {
+            if let Some(value) = region.get_value(val) {
+                if let Some(name) = value.name {
+                    if let Some(name_str) = ctx.get_string(name) {
+                        write!(&mut self.output, "%{}", name_str)
+                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                    } else {
+                        write!(&mut self.output, "%{:?}", val)
+                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                    }
+                } else {
+                    // Use a numeric name based on the slot map key
+                    write!(&mut self.output, "%{:?}", val)
+                        .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                }
+            } else {
+                write!(&mut self.output, "%{:?}", val)
+                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+            }
+        } else {
+            write!(&mut self.output, "%{:?}", val)
+                .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+        }
     }
 
     // Print a type
@@ -173,7 +194,7 @@ impl Printer {
                 if i > 0 {
                     self.print(", ")?;
                 }
-                self.print_value(result)?;
+                self.print_value(ctx, result)?;
             }
             self.print(" = ")?;
         }
@@ -188,7 +209,7 @@ impl Printer {
                 if i > 0 {
                     self.print(", ")?;
                 }
-                self.print_value(operand)?;
+                self.print_value(ctx, operand)?;
             }
         }
 
@@ -214,32 +235,57 @@ impl Printer {
             self.print_region(ctx, *region_id)?;
         }
 
-        // Print result types
-        if !op.results.is_empty() {
-            self.print(" : ")?;
-            
-            if op.results.len() == 1 {
-                // Single result - print its type
+        // Print function type signature (operand types -> result types)
+        self.print(" : ")?;
+        
+        // Print operand types
+        if op.operands.is_empty() {
+            self.print("()")?;
+        } else if op.operands.len() == 1 {
+            if let Some(region) = ctx.get_region(ctx.global_region()) {
+                if let Some(value) = region.get_value(op.operands[0]) {
+                    self.print_type(ctx, value.ty)?;
+                }
+            }
+        } else {
+            self.print("(")?;
+            for (i, &operand) in op.operands.iter().enumerate() {
+                if i > 0 {
+                    self.print(", ")?;
+                }
                 if let Some(region) = ctx.get_region(ctx.global_region()) {
-                    if let Some(value) = region.get_value(op.results[0]) {
+                    if let Some(value) = region.get_value(operand) {
                         self.print_type(ctx, value.ty)?;
                     }
                 }
-            } else {
-                // Multiple results - print type list
-                self.print("(")?;
-                for (i, &result) in op.results.iter().enumerate() {
-                    if i > 0 {
-                        self.print(", ")?;
-                    }
-                    if let Some(region) = ctx.get_region(ctx.global_region()) {
-                        if let Some(value) = region.get_value(result) {
-                            self.print_type(ctx, value.ty)?;
-                        }
+            }
+            self.print(")")?;
+        }
+        
+        self.print(" -> ")?;
+        
+        // Print result types
+        if op.results.is_empty() {
+            self.print("()")?;
+        } else if op.results.len() == 1 {
+            if let Some(region) = ctx.get_region(ctx.global_region()) {
+                if let Some(value) = region.get_value(op.results[0]) {
+                    self.print_type(ctx, value.ty)?;
+                }
+            }
+        } else {
+            self.print("(")?;
+            for (i, &result) in op.results.iter().enumerate() {
+                if i > 0 {
+                    self.print(", ")?;
+                }
+                if let Some(region) = ctx.get_region(ctx.global_region()) {
+                    if let Some(value) = region.get_value(result) {
+                        self.print_type(ctx, value.ty)?;
                     }
                 }
-                self.print(")")?;
             }
+            self.print(")")?;
         }
 
         Ok(())
