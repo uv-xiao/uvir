@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::string_interner::StringId;
 use crate::types::TypeId;
 use crate::parser::Parser;
@@ -14,6 +16,12 @@ inventory::collect!(&'static OpInfo);
 new_key_type! {
     pub struct Val;
     pub struct Opr;
+}
+
+impl Display for Val {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.as_ffi() as u32)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

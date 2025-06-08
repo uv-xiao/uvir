@@ -164,8 +164,7 @@ fn test_print_values() {
     let mut printer = Printer::new();
     printer.print_value(&ctx, val2).unwrap();
     let output = printer.get_output();
-    // For anonymous values, the output will be based on the slot map key
-    assert!(output.starts_with("%"));
+    assert_eq!(output, "%2");
 }
 
 #[test]
@@ -278,6 +277,7 @@ fn test_print_region() {
     printer.print_region(&ctx, ctx.global_region()).unwrap();
 
     let output = printer.get_output();
+    println!("output: {}", output);
     // Should contain the operation
     assert!(output.contains("arith.constant"));
     assert!(output.contains("100"));

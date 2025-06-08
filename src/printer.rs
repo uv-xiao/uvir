@@ -66,21 +66,18 @@ impl Printer {
                         write!(&mut self.output, "%{}", name_str)
                             .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
                     } else {
-                        write!(&mut self.output, "%{:?}", val)
-                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                        Err(crate::error::Error::InternalError("Unknown StringId".to_string()))
                     }
                 } else {
                     // Use a numeric name based on the slot map key
-                    write!(&mut self.output, "%{:?}", val)
+                    write!(&mut self.output, "%{}", val)
                         .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
                 }
             } else {
-                write!(&mut self.output, "%{:?}", val)
-                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                Err(crate::error::Error::InternalError("Unknown Val in region".to_string()))
             }
         } else {
-            write!(&mut self.output, "%{:?}", val)
-                .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+            Err(crate::error::Error::InternalError("Unknown region".to_string()))
         }
     }
 
