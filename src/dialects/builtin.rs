@@ -11,10 +11,10 @@ pub struct IntegerType {
 }
 
 impl IntegerType {
-    pub fn parse(parser: &mut Parser) -> Result<Self> {
-        parser.expect_char('i')?;
-        let width = parser.parse_integer()? as u32;
-        Ok(Self { width, signed: true })
+    pub fn parse(_parser: &mut Parser) -> Result<Self> {
+        // TODO: Implement dialect-specific type parsing with new token-based parser
+        // For now, built-in types are handled directly by the lexer
+        Err(crate::error::Error::ParseError("Not implemented yet".to_string()))
     }
 
     pub fn print(&self, printer: &mut Printer) -> Result<()> {
@@ -30,10 +30,10 @@ pub struct UnsignedType {
 }
 
 impl UnsignedType {
-    pub fn parse(parser: &mut Parser) -> Result<Self> {
-        parser.expect_char('u')?;
-        let width = parser.parse_integer()? as u32;
-        Ok(Self { width })
+    pub fn parse(_parser: &mut Parser) -> Result<Self> {
+        // TODO: Implement dialect-specific type parsing with new token-based parser
+        // For now, built-in types are handled directly by the lexer
+        Err(crate::error::Error::ParseError("Not implemented yet".to_string()))
     }
 
     pub fn print(&self, printer: &mut Printer) -> Result<()> {
@@ -49,18 +49,10 @@ pub struct FloatType {
 }
 
 impl FloatType {
-    pub fn parse(parser: &mut Parser) -> Result<Self> {
-        parser.expect_char('f')?;
-        let width = parser.parse_integer()? as u32;
-        let precision = match width {
-            16 => FloatPrecision::Half,
-            32 => FloatPrecision::Single,
-            64 => FloatPrecision::Double,
-            _ => return Err(crate::error::Error::ParseError(
-                format!("Invalid float width: {}", width)
-            )),
-        };
-        Ok(Self { precision })
+    pub fn parse(_parser: &mut Parser) -> Result<Self> {
+        // TODO: Implement dialect-specific type parsing with new token-based parser
+        // For now, built-in types are handled directly by the lexer
+        Err(crate::error::Error::ParseError("Not implemented yet".to_string()))
     }
 
     pub fn print(&self, printer: &mut Printer) -> Result<()> {

@@ -4,6 +4,7 @@ pub mod ops;
 pub mod region;
 pub mod attribute;
 pub mod error;
+pub mod lexer;
 pub mod parser;
 pub mod printer;
 pub mod context;
