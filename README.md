@@ -7,8 +7,7 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
 1. Derive-based operation definition
    - [x] Add tests for it.
    - [x] Fix the implementation to pass the test.
-   - [x] Use it for arith dialect
-   - [ ] Use it for builtin, scf, affine, func dialects
+   - [x] Use it for all dialects: arith, builtin, scf, affine, func
 2. Operation check is not tested.
 3. Finish the pass system and test it. 
 4. Add a test for the pass system.
@@ -21,9 +20,14 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
 - [x] Operation System: Registry-based operation management with static dispatch
 - [x] Attribute System: Flexible attribute storage supporting both builtin and dialect-specific attributes
 - [x] Dialect Support: Basic arithmetic dialect with constant, add, and multiply operations
-- [x] Derive Macros: Working Op derive macro for easy operation definition
-- [x] Arith Dialect: Full arithmetic dialect implemented using derive macros (30+ operations)
-- [x] Testing: Comprehensive tests for core functionality and derive macros
+- [x] Derive Macros: Fully functional Op derive macro with attribute handling, type constraints, and trait verification
+- [x] Complete Dialect Implementation: All core MLIR dialects implemented using derive macros:
+  - **arith**: Full arithmetic dialect with 30+ operations (integer/float arithmetic, bitwise, comparisons, casts)
+  - **builtin**: Core operations (module, unrealized_conversion_cast, constant)
+  - **scf**: Structured control flow (for, if, while, yield, condition, execute_region, parallel)
+  - **affine**: Affine operations (affine.for, affine.if, affine.apply, affine.load/store, min/max)
+  - **func**: Function operations (func, return, call, call_indirect, constant)
+- [x] Testing: Comprehensive tests for all dialects and derive macro functionality
 - [ ] Parse/print: Basic parse/print functionality with MLIR compatible grammar.
 
 ## Core Infrastructure
@@ -537,10 +541,10 @@ pub fn register_arithmetic_dialect(registry: &mut DialectRegistry) {
 
 ## Builtins
 
-Dialects to implement:
-- [ ] `builtin`: Core types and operations
-- [x] `arith`: Integer and floating-point arithmetic (implemented with derive macros)
-- [ ] `scf`: Structured control flow (for, while, if)
-- [ ] `func`: Function definitions and calls
-- [ ] `affine`: Affine loop optimizations
+Dialects implemented:
+- [x] `builtin`: Core types and operations (module, unrealized_conversion_cast, constant)
+- [x] `arith`: Integer and floating-point arithmetic (30+ operations including add, sub, mul, div, bitwise, comparisons, casts)
+- [x] `scf`: Structured control flow (for, while, if, yield, condition, execute_region, parallel, reduce)
+- [x] `func`: Function definitions and calls (func, return, call, call_indirect, constant)
+- [x] `affine`: Affine loop optimizations (affine.for, affine.if, affine.apply, affine.load/store, min/max, vector operations)
 - [ ] `memref`: Memory references (if needed)

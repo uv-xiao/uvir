@@ -31,17 +31,17 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
     
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
-        let _field_type = &field.ty;
+        let field_type = &field.ty;
         
         for attr in &field.attrs {
             if attr.path().is_ident("_def") {
-                defs.push((field_name.clone(), parse_def_attr(attr)));
+                defs.push((field_name.clone(), field_type.clone(), parse_def_attr(attr)));
             } else if attr.path().is_ident("_use") {
-                uses.push(field_name.clone());
+                uses.push((field_name.clone(), field_type.clone()));
             } else if attr.path().is_ident("_attr") {
-                attrs.push(field_name.clone());
+                attrs.push((field_name.clone(), field_type.clone()));
             } else if attr.path().is_ident("_region") {
-                regions.push(field_name.clone());
+                regions.push((field_name.clone(), field_type.clone()));
             }
         }
     }
@@ -58,22 +58,72 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
     let num_results = defs.len();
     
     // Generate conversion functions
-    let into_op_data_operands = uses.iter().map(|u| quote! { self.#u });
-    let into_op_data_results = defs.iter().map(|(d, _)| quote! { self.#d });
-    let into_op_data_regions = regions.iter().map(|r| quote! { self.#r });
+    let into_op_data_operands = uses.iter().map(|(u, _)| quote! { self.#u });
+    let into_op_data_results = defs.iter().map(|(d, _, _)| quote! { self.#d });
+    let into_op_data_regions = regions.iter().map(|(r, _)| quote! { self.#r });
     
-    let from_op_data_uses = uses.iter().enumerate().map(|(i, u)| {
+    // Generate attribute insertion code
+    let attr_insertions = attrs.iter().map(|(name, ty)| {
+        let name_str = name.to_string();
+        // Check if the type is already Attribute
+        if let syn::Type::Path(type_path) = ty {
+            if type_path.path.segments.last().map(|s| s.ident.to_string()) == Some("Attribute".to_string()) {
+                quote! {
+                    {
+                        let key = ctx.intern_string(#name_str);
+                        attributes.push((key, self.#name.clone()));
+                    }
+                }
+            } else {
+                // For other types, we need to convert to Attribute
+                // For now, we'll just support basic types
+                quote! {
+                    {
+                        let key = ctx.intern_string(#name_str);
+                        // TODO: Implement proper conversion based on type
+                        attributes.push((key, uvir::attribute::Attribute::Integer(0)));
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        }
+    });
+    
+    let from_op_data_uses = uses.iter().enumerate().map(|(i, (u, _))| {
         quote! { #u: op.operands[#i] }
     });
-    let from_op_data_defs = defs.iter().enumerate().map(|(i, (d, _))| {
+    let from_op_data_defs = defs.iter().enumerate().map(|(i, (d, _, _))| {
         quote! { #d: op.results[#i] }
     });
-    let from_op_data_attrs = attrs.iter().map(|a| {
-        // TODO: Properly extract attributes from op.attributes
-        // For now, use a placeholder value
-        quote! { #a: uvir::attribute::Attribute::Integer(0) }
+    let from_op_data_attrs = attrs.iter().map(|(a, ty)| {
+        let a_str = a.to_string();
+        // Check if the type is already Attribute
+        if let syn::Type::Path(type_path) = ty {
+            if type_path.path.segments.last().map(|s| s.ident.to_string()) == Some("Attribute".to_string()) {
+                quote! { 
+                    #a: op.attributes.iter()
+                        .find(|(k, _)| ctx.get_string(*k) == Some(#a_str))
+                        .map(|(_, v)| v.clone())
+                        .unwrap_or(uvir::attribute::Attribute::Integer(0))
+                }
+            } else {
+                // For other types, we need to convert from Attribute
+                quote! { 
+                    #a: {
+                        let attr = op.attributes.iter()
+                            .find(|(k, _)| ctx.get_string(*k) == Some(#a_str))
+                            .map(|(_, v)| v);
+                        // TODO: Implement conversion from Attribute to field type
+                        Default::default()
+                    }
+                }
+            }
+        } else {
+            quote! { #a: Default::default() }
+        }
     });
-    let from_op_data_regions = regions.iter().enumerate().map(|(i, r)| {
+    let from_op_data_regions = regions.iter().enumerate().map(|(i, (r, _))| {
         quote! { #r: op.regions[#i] }
     });
     
@@ -105,7 +155,11 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                 ));
             }
             
-            // TODO: Add trait verification (e.g., SameTy)
+            // Trait verification
+            // Note: Without access to Context, we cannot verify type constraints like SameTy
+            // This would need to be done at a higher level where Context is available
+            
+            // For now, we can only verify structural properties
             
             Ok(())
         }
@@ -161,22 +215,15 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
         }
         
         impl #name {
-            pub fn into_op_data(self, ctx: &mut uvir::context::Context) -> uvir::ops::OpData {
-                // Extract fields before moving self
+            pub fn into_op_data(mut self, ctx: &mut uvir::context::Context) -> uvir::ops::OpData {
+                // Create attributes vector with proper conversions
+                let mut attributes = uvir::smallvec::SmallVec::new();
+                #(#attr_insertions)*
+                
+                // Extract fields after attributes (which may need cloning)
                 let operands = uvir::smallvec::smallvec![#(#into_op_data_operands),*];
                 let results = uvir::smallvec::smallvec![#(#into_op_data_results),*];
                 let regions = uvir::smallvec::smallvec![#(#into_op_data_regions),*];
-                
-                // Create attributes vector with proper conversions
-                let mut attributes = uvir::smallvec::SmallVec::new();
-                #(
-                    {
-                        let key = ctx.intern_string(stringify!(#attrs));
-                        // TODO: Implement proper conversion based on field type
-                        // For now, add a placeholder integer attribute
-                        attributes.push((key, uvir::attribute::Attribute::Integer(0)));
-                    }
-                )*
                 
                 uvir::ops::OpData {
                     info: &#info_name,
@@ -188,7 +235,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                 }
             }
             
-            pub fn from_op_data(op: &uvir::ops::OpData, _ctx: &uvir::Context) -> Self {
+            pub fn from_op_data(op: &uvir::ops::OpData, ctx: &uvir::Context) -> Self {
                 // Extract fields from OpData
                 let mut uses_iter = op.operands.iter();
                 let mut defs_iter = op.results.iter();
@@ -255,7 +302,20 @@ fn parse_operation_attr(attr: &syn::Attribute) -> (&'static str, &'static str, V
     )
 }
 
-fn parse_def_attr(_attr: &syn::Attribute) -> Option<String> {
-    // TODO: Parse type constraint from _def attribute
-    None
+fn parse_def_attr(attr: &syn::Attribute) -> Option<String> {
+    // Parse type constraint from _def attribute like #[_def(ty = "T")]
+    let mut type_constraint = None;
+    
+    if attr.path().is_ident("_def") {
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("ty") {
+                let value = meta.value()?;
+                let s: syn::LitStr = value.parse()?;
+                type_constraint = Some(s.value());
+            }
+            Ok(())
+        });
+    }
+    
+    type_constraint
 }
