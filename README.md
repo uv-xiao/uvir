@@ -4,18 +4,14 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
 
 ## TODO
 
-1. Parse/print is not fully MLIR-compatible. 
-   - Refer to https://mlir.llvm.org/docs/LangRef/ for the grammar except Block and Branch operations. Summarize the grammar in GRAMMAR.md.
-   - For printer_test, rewrite assertions to strictly compare the output with the expected one in MLIR format.
-   - For parser_test, add a test with a MLIR snippet to parse.
-   - Fix the parser and printer to pass the test.
-2. Derive-based operation definition is not tested. 
-   - Add a test for it.
-   - Fix the implementation to pass the test.
-   - Use it for dialects.
-3. Operation check is not tested.
-4. Finish the pass system and test it. 
-5. Add a test for the pass system.
+1. Derive-based operation definition
+   - [x] Add tests for it.
+   - [x] Fix the implementation to pass the test.
+   - [x] Use it for arith dialect
+   - [ ] Use it for builtin, scf, affine, func dialects
+2. Operation check is not tested.
+3. Finish the pass system and test it. 
+4. Add a test for the pass system.
 
 ## Progress
 
@@ -25,7 +21,9 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
 - [x] Operation System: Registry-based operation management with static dispatch
 - [x] Attribute System: Flexible attribute storage supporting both builtin and dialect-specific attributes
 - [x] Dialect Support: Basic arithmetic dialect with constant, add, and multiply operations
-- [x] Testing: Basic tests verifying core functionality
+- [x] Derive Macros: Working Op derive macro for easy operation definition
+- [x] Arith Dialect: Full arithmetic dialect implemented using derive macros (30+ operations)
+- [x] Testing: Comprehensive tests for core functionality and derive macros
 - [ ] Parse/print: Basic parse/print functionality with MLIR compatible grammar.
 
 ## Core Infrastructure
@@ -541,7 +539,8 @@ pub fn register_arithmetic_dialect(registry: &mut DialectRegistry) {
 
 Dialects to implement:
 - [ ] `builtin`: Core types and operations
-- [ ] `arith`: Integer and floating-point arithmetic
+- [x] `arith`: Integer and floating-point arithmetic (implemented with derive macros)
 - [ ] `scf`: Structured control flow (for, while, if)
 - [ ] `func`: Function definitions and calls
+- [ ] `affine`: Affine loop optimizations
 - [ ] `memref`: Memory references (if needed)

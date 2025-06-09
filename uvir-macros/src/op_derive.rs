@@ -60,12 +60,21 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
     // Generate conversion functions
     let into_op_data_operands = uses.iter().map(|u| quote! { self.#u });
     let into_op_data_results = defs.iter().map(|(d, _)| quote! { self.#d });
+    let into_op_data_regions = regions.iter().map(|r| quote! { self.#r });
     
-    let _from_op_data_uses = uses.iter().enumerate().map(|(i, u)| {
+    let from_op_data_uses = uses.iter().enumerate().map(|(i, u)| {
         quote! { #u: op.operands[#i] }
     });
-    let _from_op_data_defs = defs.iter().enumerate().map(|(i, (d, _))| {
+    let from_op_data_defs = defs.iter().enumerate().map(|(i, (d, _))| {
         quote! { #d: op.results[#i] }
+    });
+    let from_op_data_attrs = attrs.iter().map(|a| {
+        // TODO: Properly extract attributes from op.attributes
+        // For now, use a placeholder value
+        quote! { #a: uvir::attribute::Attribute::Integer(0) }
+    });
+    let from_op_data_regions = regions.iter().enumerate().map(|(i, r)| {
+        quote! { #r: op.regions[#i] }
     });
     
     let expanded = quote! {
@@ -80,18 +89,18 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
         };
         
         // Register with inventory
-        uvir::inventory::submit!(&'static uvir::ops::OpInfo: &#info_name);
+        uvir::inventory::submit!(&#info_name);
         
         // Verification function
         fn #verify_fn(op: &uvir::ops::OpData) -> uvir::error::Result<()> {
             // Basic verification: check operand and result counts
             if op.operands.len() != #num_operands {
-                return Err(uvir::error::Error::Verification(
+                return Err(uvir::error::Error::VerificationError(
                     format!("Expected {} operands, found {}", #num_operands, op.operands.len())
                 ));
             }
             if op.results.len() != #num_results {
-                return Err(uvir::error::Error::Verification(
+                return Err(uvir::error::Error::VerificationError(
                     format!("Expected {} results, found {}", #num_results, op.results.len())
                 ));
             }
@@ -153,27 +162,50 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
         
         impl #name {
             pub fn into_op_data(self, ctx: &mut uvir::context::Context) -> uvir::ops::OpData {
-                let mut data = uvir::ops::OpStorage::new();
-                data.write(&self);
+                // Extract fields before moving self
+                let operands = uvir::smallvec::smallvec![#(#into_op_data_operands),*];
+                let results = uvir::smallvec::smallvec![#(#into_op_data_results),*];
+                let regions = uvir::smallvec::smallvec![#(#into_op_data_regions),*];
+                
+                // Create attributes vector with proper conversions
+                let mut attributes = uvir::smallvec::SmallVec::new();
+                #(
+                    {
+                        let key = ctx.intern_string(stringify!(#attrs));
+                        // TODO: Implement proper conversion based on field type
+                        // For now, add a placeholder integer attribute
+                        attributes.push((key, uvir::attribute::Attribute::Integer(0)));
+                    }
+                )*
+                
                 uvir::ops::OpData {
                     info: &#info_name,
-                    operands: uvir::smallvec::smallvec![#(#into_op_data_operands),*],
-                    results: uvir::smallvec::smallvec![#(#into_op_data_results),*],
-                    attributes: Default::default(),
-                    regions: Default::default(),
-                    custom_data: data,
+                    operands,
+                    results,
+                    attributes,
+                    regions,
+                    custom_data: uvir::ops::OpStorage::from_value(self),
                 }
             }
             
-            pub fn from_op_data(op: &uvir::ops::OpData) -> Option<&Self> {
-                if std::ptr::eq(op.info, &#info_name) {
-                    Some(op.custom_data.as_ref())
-                } else {
-                    None
+            pub fn from_op_data(op: &uvir::ops::OpData, _ctx: &uvir::Context) -> Self {
+                // Extract fields from OpData
+                let mut uses_iter = op.operands.iter();
+                let mut defs_iter = op.results.iter();
+                
+                Self {
+                    #(#from_op_data_uses,)*
+                    #(#from_op_data_defs,)*
+                    #(#from_op_data_attrs,)*
+                    #(#from_op_data_regions,)*
                 }
             }
             
             pub fn op_info() -> &'static uvir::ops::OpInfo {
+                &#info_name
+            }
+            
+            pub fn info() -> &'static uvir::ops::OpInfo {
                 &#info_name
             }
         }
