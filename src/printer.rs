@@ -124,6 +124,68 @@ impl Printer {
                         self.print(")")
                     }
                 }
+                TypeKind::Index => self.print("index"),
+                TypeKind::None => self.print("none"),
+                TypeKind::Complex { element_type } => {
+                    self.print("complex<")?;
+                    self.print_type(ctx, *element_type)?;
+                    self.print(">")
+                }
+                TypeKind::Vector { shape, element_type } => {
+                    self.print("vector<")?;
+                    for (i, &dim) in shape.iter().enumerate() {
+                        if i > 0 {
+                            self.print("x")?;
+                        }
+                        write!(&mut self.output, "{}", dim)
+                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?;
+                    }
+                    if !shape.is_empty() {
+                        self.print("x")?;
+                    }
+                    self.print_type(ctx, *element_type)?;
+                    self.print(">")
+                }
+                TypeKind::Tensor { shape, element_type } => {
+                    self.print("tensor<")?;
+                    for (i, dim) in shape.iter().enumerate() {
+                        if i > 0 {
+                            self.print("x")?;
+                        }
+                        match dim {
+                            Some(d) => write!(&mut self.output, "{}", d)
+                                .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?,
+                            None => self.print("?")?,
+                        }
+                    }
+                    if !shape.is_empty() {
+                        self.print("x")?;
+                    }
+                    self.print_type(ctx, *element_type)?;
+                    self.print(">")
+                }
+                TypeKind::MemRef { shape, element_type, memory_space } => {
+                    self.print("memref<")?;
+                    for (i, dim) in shape.iter().enumerate() {
+                        if i > 0 {
+                            self.print("x")?;
+                        }
+                        match dim {
+                            Some(d) => write!(&mut self.output, "{}", d)
+                                .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?,
+                            None => self.print("?")?,
+                        }
+                    }
+                    if !shape.is_empty() {
+                        self.print("x")?;
+                    }
+                    self.print_type(ctx, *element_type)?;
+                    if let Some(space) = memory_space {
+                        write!(&mut self.output, ", {}", space)
+                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?;
+                    }
+                    self.print(">")
+                }
                 TypeKind::Dialect { dialect, data: _ } => {
                     // For now, just print the dialect name
                     if let Some(dialect_name) = ctx.get_string(*dialect) {
@@ -185,6 +247,9 @@ impl Printer {
 
     // Print an operation
     pub fn print_operation(&mut self, ctx: &Context, op: &OpData) -> Result<()> {
+        // Determine if this operation should be printed in generic form
+        let use_generic_form = false; // TODO: Add logic to determine when to use generic form
+        
         // Print results if any
         if !op.results.is_empty() {
             for (i, &result) in op.results.iter().enumerate() {
@@ -197,16 +262,29 @@ impl Printer {
         }
 
         // Print operation name
-        self.print(&format!("{}.{}", op.info.dialect, op.info.name))?;
+        if use_generic_form {
+            self.print(&format!("\"{}.{}\"", op.info.dialect, op.info.name))?;
+        } else {
+            self.print(&format!("{}.{}", op.info.dialect, op.info.name))?;
+        }
 
         // Print operands
-        if !op.operands.is_empty() {
-            self.print(" ")?;
+        if use_generic_form || !op.operands.is_empty() {
+            if use_generic_form {
+                self.print("(")?;
+            } else if !op.operands.is_empty() {
+                self.print(" ")?;
+            }
+            
             for (i, &operand) in op.operands.iter().enumerate() {
                 if i > 0 {
                     self.print(", ")?;
                 }
                 self.print_value(ctx, operand)?;
+            }
+            
+            if use_generic_form {
+                self.print(")")?;
             }
         }
 
@@ -232,9 +310,36 @@ impl Printer {
             self.print_region(ctx, *region_id)?;
         }
 
-        // Print function type signature (operand types -> result types)
-        self.print(" : ")?;
-        
+        // Determine if we need to print type signature
+        // In MLIR, type signatures are printed:
+        // 1. Always for generic operations
+        // 2. For operations that require type disambiguation
+        // 3. Not for terminators or other operations where types are implied
+        let should_print_types = use_generic_form || 
+            self.operation_needs_type_signature(op.info.name);
+
+        if should_print_types {
+            self.print(" : ")?;
+            
+            // Print function type
+            self.print_function_type(ctx, op)?;
+        }
+
+        Ok(())
+    }
+    
+    // Helper to determine if an operation needs type signature
+    fn operation_needs_type_signature(&self, op_name: &str) -> bool {
+        // Common operations that don't need type signatures in custom form
+        match op_name {
+            "return" | "br" | "cond_br" | "yield" => false,
+            // Most other operations need type signatures
+            _ => true,
+        }
+    }
+    
+    // Helper to print function type signature
+    fn print_function_type(&mut self, ctx: &Context, op: &OpData) -> Result<()> {
         // Print operand types
         if op.operands.is_empty() {
             self.print("()")?;
@@ -284,7 +389,7 @@ impl Printer {
             }
             self.print(")")?;
         }
-
+        
         Ok(())
     }
 

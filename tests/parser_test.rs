@@ -584,10 +584,10 @@ fn test_mlir_function_definition_tokens() {
     // Check for key tokens that should exist
     let token_checks = vec![
         (
-            "BareId(func)",
+            "func keyword",
             tokens
                 .iter()
-                .any(|t| matches!(t, Token::BareId(s) if s == "func")),
+                .any(|t| matches!(t, Token::Func)),
         ),
         (
             "BareId(addi)",
@@ -596,10 +596,10 @@ fn test_mlir_function_definition_tokens() {
                 .any(|t| matches!(t, Token::BareId(s) if s == "addi")),
         ),
         (
-            "BareId(return)",
+            "return keyword",
             tokens
                 .iter()
-                .any(|t| matches!(t, Token::BareId(s) if s == "return")),
+                .any(|t| matches!(t, Token::Return)),
         ),
         (
             "SymbolRef",

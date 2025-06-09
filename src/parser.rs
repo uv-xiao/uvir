@@ -121,6 +121,102 @@ impl<'a> Parser<'a> {
             None => Err(Error::ParseError("Expected float literal, found EOF".to_string())),
         }
     }
+    
+    // Parse a shape like 4x4x? or ?x10
+    pub fn parse_shape(&mut self) -> Result<Vec<Option<i64>>> {
+        let mut dims = Vec::new();
+        
+        // Handle unranked tensor with *x prefix
+        if matches!(self.peek(), Some(Token::Star)) {
+            self.advance();
+            if matches!(self.peek(), Some(Token::X)) {
+                self.advance();
+            }
+            return Ok(vec![]); // Empty vec represents unranked
+        }
+        
+        // Parse dimensions with DimensionPrefix tokens
+        while let Some(token) = self.peek() {
+            match token {
+                Token::DimensionPrefix(prefix) => {
+                    let prefix = prefix.clone();
+                    self.advance();
+                    
+                    // Parse the dimension from the prefix (e.g., "4x" -> 4)
+                    let dim_str = &prefix[..prefix.len()-1]; // Remove trailing 'x'
+                    if dim_str == "?" {
+                        dims.push(None);
+                    } else if dim_str == "*" {
+                        return Ok(vec![]); // Unranked
+                    } else if let Ok(dim) = dim_str.parse::<i64>() {
+                        dims.push(Some(dim));
+                    } else {
+                        return Err(Error::ParseError(format!("Invalid dimension: {}", dim_str)));
+                    }
+                }
+                Token::Question => {
+                    self.advance();
+                    dims.push(None);
+                    // Check if there's an 'x' following
+                    if matches!(self.peek(), Some(Token::X)) {
+                        self.advance();
+                    } else {
+                        // Last dimension without 'x'
+                        break;
+                    }
+                }
+                Token::IntegerLiteral(_) | Token::HexIntegerLiteral(_) => {
+                    dims.push(Some(self.expect_integer()?));
+                    // Check if there's an 'x' following
+                    if matches!(self.peek(), Some(Token::X)) {
+                        self.advance();
+                    } else {
+                        // Last dimension without 'x'
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
+        
+        Ok(dims)
+    }
+    
+    // Parse a static shape (no dynamic dimensions)
+    pub fn parse_static_shape(&mut self) -> Result<Vec<i64>> {
+        let mut dims = Vec::new();
+        
+        // Parse dimensions with DimensionPrefix tokens
+        while let Some(token) = self.peek() {
+            match token {
+                Token::DimensionPrefix(prefix) => {
+                    let prefix = prefix.clone();
+                    self.advance();
+                    
+                    // Parse the dimension from the prefix (e.g., "4x" -> 4)
+                    let dim_str = &prefix[..prefix.len()-1]; // Remove trailing 'x'
+                    if let Ok(dim) = dim_str.parse::<i64>() {
+                        dims.push(dim);
+                    } else {
+                        return Err(Error::ParseError(format!("Expected static dimension, got: {}", dim_str)));
+                    }
+                }
+                Token::IntegerLiteral(_) | Token::HexIntegerLiteral(_) => {
+                    dims.push(self.expect_integer()?);
+                    // Check if there's an 'x' following
+                    if matches!(self.peek(), Some(Token::X)) {
+                        self.advance();
+                    } else {
+                        // Last dimension without 'x'
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
+        
+        Ok(dims)
+    }
 
     // Parse a value reference like %0, %arg0, %result
     pub fn parse_value_ref(&mut self) -> Result<Val> {
@@ -164,6 +260,53 @@ impl<'a> Parser<'a> {
             Some(Token::F64) => Ok(self.ctx.intern_type(TypeKind::Float { precision: FloatPrecision::Double })),
             Some(Token::BF16) => Ok(self.ctx.intern_type(TypeKind::Float { precision: FloatPrecision::Half })), // BF16 treated as Half for now
             
+            // Index type
+            Some(Token::Index) => Ok(self.ctx.intern_type(TypeKind::Index)),
+            
+            // None type
+            Some(Token::None) => Ok(self.ctx.intern_type(TypeKind::None)),
+            
+            // Complex type
+            Some(Token::Complex) => {
+                self.expect_token(Token::LeftAngle)?;
+                let element_type = self.parse_type()?;
+                self.expect_token(Token::RightAngle)?;
+                Ok(self.ctx.intern_type(TypeKind::Complex { element_type }))
+            }
+            
+            // Vector type
+            Some(Token::Vector) => {
+                self.expect_token(Token::LeftAngle)?;
+                let shape = self.parse_static_shape()?;
+                let element_type = self.parse_type()?;
+                self.expect_token(Token::RightAngle)?;
+                Ok(self.ctx.intern_type(TypeKind::Vector { shape, element_type }))
+            }
+            
+            // Tensor type
+            Some(Token::Tensor) => {
+                self.expect_token(Token::LeftAngle)?;
+                let shape = self.parse_shape()?;
+                let element_type = self.parse_type()?;
+                self.expect_token(Token::RightAngle)?;
+                Ok(self.ctx.intern_type(TypeKind::Tensor { shape, element_type }))
+            }
+            
+            // MemRef type
+            Some(Token::Memref) => {
+                self.expect_token(Token::LeftAngle)?;
+                let shape = self.parse_shape()?;
+                let element_type = self.parse_type()?;
+                let memory_space = if matches!(self.peek(), Some(Token::Comma)) {
+                    self.advance();
+                    Some(self.expect_integer()? as u64)
+                } else {
+                    None
+                };
+                self.expect_token(Token::RightAngle)?;
+                Ok(self.ctx.intern_type(TypeKind::MemRef { shape, element_type, memory_space }))
+            }
+            
             // Generic integer types
             Some(Token::GenericInteger(width)) => {
                 let width = *width;
@@ -172,6 +315,10 @@ impl<'a> Parser<'a> {
             Some(Token::GenericUnsigned(width)) => {
                 let width = *width;
                 Ok(self.ctx.intern_type(TypeKind::Integer { width, signed: false }))
+            }
+            Some(Token::GenericSigned(width)) => {
+                let width = *width;
+                Ok(self.ctx.intern_type(TypeKind::Integer { width, signed: true }))
             }
             
             // Dialect types starting with !
@@ -235,21 +382,71 @@ impl<'a> Parser<'a> {
             Some(Token::IntegerLiteral(value)) => {
                 let value = *value;
                 self.advance();
+                
+                // Check if there's a type suffix
+                if matches!(self.peek(), Some(Token::Colon)) {
+                    self.advance();
+                    let _ty = self.parse_type()?; // Parse but ignore for now
+                }
+                
                 Ok(Attribute::Integer(value))
             }
             Some(Token::HexIntegerLiteral(value)) => {
                 let value = *value;
                 self.advance();
+                
+                // Check if there's a type suffix
+                if matches!(self.peek(), Some(Token::Colon)) {
+                    self.advance();
+                    let _ty = self.parse_type()?; // Parse but ignore for now
+                }
+                
                 Ok(Attribute::Integer(value))
             }
             Some(Token::FloatLiteral(value)) => {
                 let value = *value;
                 self.advance();
+                
+                // Check if there's a type suffix
+                if matches!(self.peek(), Some(Token::Colon)) {
+                    self.advance();
+                    let _ty = self.parse_type()?; // Parse but ignore for now
+                }
+                
                 Ok(Attribute::Float(value))
             }
             Some(Token::StringLiteral(_)) => {
                 let string = self.expect_string()?;
+                
+                // Check if there's a type suffix
+                if matches!(self.peek(), Some(Token::Colon)) {
+                    self.advance();
+                    let _ty = self.parse_type()?; // Parse but ignore for now
+                }
+                
                 Ok(Attribute::String(self.ctx.intern_string(&string)))
+            }
+            Some(Token::True) => {
+                self.advance();
+                Ok(Attribute::Integer(1)) // Represent bool as integer for now
+            }
+            Some(Token::False) => {
+                self.advance();
+                Ok(Attribute::Integer(0)) // Represent bool as integer for now
+            }
+            Some(Token::Unit) => {
+                self.advance();
+                Ok(Attribute::String(self.ctx.intern_string("unit"))) // Represent unit as string for now
+            }
+            Some(Token::Dense) => {
+                // Dense attribute: dense<[1, 2, 3]> : tensor<3xi32>
+                self.advance();
+                self.expect_token(Token::LeftAngle)?;
+                let value = self.parse_attribute()?; // Parse the content
+                self.expect_token(Token::RightAngle)?;
+                self.expect_token(Token::Colon)?;
+                let _ty = self.parse_type()?; // Parse but ignore the type for now
+                Ok(value) // For now, just return the inner value
             }
             Some(Token::LeftBracket) => {
                 // Array attribute
@@ -268,6 +465,11 @@ impl<'a> Parser<'a> {
                 
                 self.expect_token(Token::RightBracket)?;
                 Ok(Attribute::Array(elements))
+            }
+            // Type attribute - a type used as an attribute
+            Some(token) if token.is_type() => {
+                let ty = self.parse_type()?;
+                Ok(Attribute::Type(ty))
             }
             Some(token) => Err(Error::ParseError(format!(
                 "Unsupported attribute type: {:?}",
@@ -356,10 +558,22 @@ impl<'a> Parser<'a> {
             self.expect_token(Token::Equals)?;
         }
         
-        // Parse operation name (dialect.opname)
-        let dialect_name = self.expect_identifier()?;
-        self.expect_token(Token::Dot)?;
-        let op_name = self.expect_identifier()?;
+        // Parse operation name - either "dialect.opname" or dialect.opname
+        let (dialect_name, op_name, is_generic) = if matches!(self.peek(), Some(Token::StringLiteral(_))) {
+            // Generic syntax: "dialect.opname"
+            let full_name = self.expect_string()?;
+            let parts: Vec<&str> = full_name.splitn(2, '.').collect();
+            if parts.len() != 2 {
+                return Err(Error::ParseError(format!("Invalid operation name format: {}", full_name)));
+            }
+            (parts[0].to_string(), parts[1].to_string(), true)
+        } else {
+            // Custom syntax: dialect.opname
+            let dialect_name = self.expect_identifier()?;
+            self.expect_token(Token::Dot)?;
+            let op_name = self.expect_identifier()?;
+            (dialect_name, op_name, false)
+        };
         
         // Look up the operation info
         let dialect_id = self.ctx.intern_string(&dialect_name);
@@ -372,14 +586,37 @@ impl<'a> Parser<'a> {
         // Parse operands
         let mut operands = SmallVec::new();
         
-        // Check if there are operands (value references)
-        while self.peek().map_or(false, |t| t.is_value_ref()) {
-            operands.push(self.parse_value_ref()?);
+        // Generic syntax requires parentheses for operands
+        let has_parens = matches!(self.peek(), Some(Token::LeftParen));
+        
+        if has_parens {
+            self.advance(); // consume '('
             
-            if matches!(self.peek(), Some(Token::Comma)) {
-                self.advance();
-            } else {
-                break;
+            while !matches!(self.peek(), Some(Token::RightParen)) {
+                if self.peek().map_or(false, |t| t.is_value_ref()) {
+                    operands.push(self.parse_value_ref()?);
+                    
+                    if matches!(self.peek(), Some(Token::Comma)) {
+                        self.advance();
+                    } else if !matches!(self.peek(), Some(Token::RightParen)) {
+                        return Err(Error::ParseError("Expected ',' or ')' in operand list".to_string()));
+                    }
+                } else {
+                    break;
+                }
+            }
+            
+            self.expect_token(Token::RightParen)?;
+        } else {
+            // Custom syntax: operands without parentheses
+            while self.peek().map_or(false, |t| t.is_value_ref()) {
+                operands.push(self.parse_value_ref()?);
+                
+                if matches!(self.peek(), Some(Token::Comma)) {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
         }
         
@@ -396,30 +633,37 @@ impl<'a> Parser<'a> {
             regions.push(self.parse_region()?);
         }
         
-        // Parse result types
-        if !results.is_empty() {
+        // Parse type signature
+        // For generic syntax, type signature is mandatory
+        // For custom syntax, it's optional but we'll parse it if present
+        if is_generic || matches!(self.peek(), Some(Token::Colon)) {
             if matches!(self.peek(), Some(Token::Colon)) {
                 self.advance();
-                
-                // Parse type list
-                if results.len() == 1 {
-                    let ty = self.parse_type()?;
-                    // Update the result value with the correct type
-                    if let Some(_region) = self.current_region {
-                        self.ctx.set_value_type(results[0], ty);
+            } else if is_generic {
+                return Err(Error::ParseError("Generic operation syntax requires type signature".to_string()));
+            }
+            
+            // Parse function type signature
+            let func_type = self.parse_function_type()?;
+            
+            // Update result types based on the function type
+            let output_types = if let Some(TypeKind::Function { outputs, .. }) = self.ctx.get_type(func_type) {
+                if outputs.len() != results.len() {
+                    return Err(Error::ParseError(format!(
+                        "Type signature specifies {} results but operation has {}",
+                        outputs.len(), results.len()
+                    )));
+                }
+                outputs.clone()
+            } else {
+                Vec::new()
+            };
+            
+            for (i, &result) in results.iter().enumerate() {
+                if let Some(_region) = self.current_region {
+                    if i < output_types.len() {
+                        self.ctx.set_value_type(result, output_types[i]);
                     }
-                } else {
-                    self.expect_token(Token::LeftParen)?;
-                    for (i, &result) in results.iter().enumerate() {
-                        if i > 0 {
-                            self.expect_token(Token::Comma)?;
-                        }
-                        let ty = self.parse_type()?;
-                        if let Some(_region) = self.current_region {
-                            self.ctx.set_value_type(result, ty);
-                        }
-                    }
-                    self.expect_token(Token::RightParen)?;
                 }
             }
         }
@@ -444,14 +688,94 @@ impl<'a> Parser<'a> {
 
     // Parse a module (top-level)
     pub fn parse_module(&mut self) -> Result<()> {
-        while !self.is_at_end() {
-            if self.is_at_end() {
-                break;
+        // Check if we have an explicit module operation
+        if matches!(self.peek(), Some(Token::Module)) {
+            self.advance(); // consume 'module'
+            
+            // Parse optional symbol name
+            let _module_name = if matches!(self.peek(), Some(Token::SymbolRef(_))) {
+                if let Some(Token::SymbolRef(name)) = self.advance() {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            // Parse optional attributes
+            let _module_attrs = if matches!(self.peek(), Some(Token::LeftBrace)) {
+                self.parse_attribute_dict()?
+            } else {
+                smallvec![]
+            };
+            
+            // Parse the module body (region)
+            self.expect_token(Token::LeftBrace)?;
+            
+            // Parse operations in the module
+            while !matches!(self.peek(), Some(Token::RightBrace)) {
+                if self.is_at_end() {
+                    return Err(Error::ParseError("Unexpected EOF in module body".to_string()));
+                }
+                
+                // Parse type/attribute aliases or operations
+                match self.peek() {
+                    Some(Token::Bang) => {
+                        // Type alias: !alias = type
+                        self.parse_type_alias()?;
+                    }
+                    Some(Token::Hash) => {
+                        // Attribute alias: #alias = attribute  
+                        self.parse_attribute_alias()?;
+                    }
+                    _ => {
+                        self.parse_operation()?;
+                    }
+                }
             }
             
-            self.parse_operation()?;
+            self.expect_token(Token::RightBrace)?;
+        } else {
+            // Implicit module - just parse operations at top level
+            while !self.is_at_end() {
+                // Parse type/attribute aliases or operations
+                match self.peek() {
+                    Some(Token::Bang) => {
+                        // Type alias: !alias = type
+                        self.parse_type_alias()?;
+                    }
+                    Some(Token::Hash) => {
+                        // Attribute alias: #alias = attribute  
+                        self.parse_attribute_alias()?;
+                    }
+                    _ => {
+                        self.parse_operation()?;
+                    }
+                }
+            }
         }
         
+        Ok(())
+    }
+    
+    // Parse a type alias: !alias = type
+    fn parse_type_alias(&mut self) -> Result<()> {
+        self.expect_token(Token::Bang)?;
+        let _alias_name = self.expect_identifier()?;
+        self.expect_token(Token::Equals)?;
+        let _aliased_type = self.parse_type()?;
+        // TODO: Store type alias in context
+        Ok(())
+    }
+    
+    // Parse an attribute alias: #alias = attribute
+    fn parse_attribute_alias(&mut self) -> Result<()> {
+        self.expect_token(Token::Hash)?;
+        let _alias_name = self.expect_identifier()?;
+        self.expect_token(Token::Equals)?;
+        let _aliased_attr = self.parse_attribute()?;
+        // TODO: Store attribute alias in context
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 # MLIR Grammar Reference
 
-This document summarizes the MLIR grammar based on the [MLIR Language Reference](https://mlir.llvm.org/docs/LangRef/), excluding Block and Branch operations as specified in the uvir project limitations.
+This document provides a comprehensive summary of the MLIR grammar based on the [MLIR Language Reference](https://mlir.llvm.org/docs/LangRef/). It includes the complete grammar specification while noting uvir-specific limitations (no blocks/branches, only IsolatedFromAbove regions).
 
 ## EBNF Notation
 
@@ -19,17 +19,24 @@ literal     ::= `abcd` // Matches the literal `abcd`.
 ### Lexical Elements
 
 ```
-// TODO: Clarify the split between lexing (tokens) and parsing (grammar).
+// Character classes
 digit     ::= [0-9]
 hex_digit ::= [0-9a-fA-F]
 letter    ::= [a-zA-Z]
 id-punct  ::= [$._-]
 
+// Literals
 integer-literal ::= decimal-literal | hexadecimal-literal
 decimal-literal ::= digit+
 hexadecimal-literal ::= `0x` hex_digit+
 float-literal ::= [-+]?[0-9]+[.][0-9]*([eE][-+]?[0-9]+)?
-string-literal  ::= `"` [^"\n\f\v\r]* `"`   // TODO: define escaping rules
+              | `0x` hex_digit+ `p` [+-]? digit+
+              | (inf | nan | inf.0 | nan.0)
+string-literal  ::= `"` (char | escape)* `"`
+char           ::= [^"\n\f\v\r\\]
+escape         ::= `\\` [nfrtvb"'\\]
+                 | `\\x` hex_digit hex_digit
+                 | `\\` digit digit digit
 ```
 
 ### Comments
@@ -40,7 +47,11 @@ MLIR supports BCPL-style comments starting with `//` and continuing until end of
 
 ```
 // Top level production
-toplevel := (operation | attribute-alias-def | type-alias-def)*
+top-level-module ::= module-op
+module-op ::= `module` module-attributes? region
+
+// Simplified for parsing without explicit module
+toplevel ::= (operation | attribute-alias-def | type-alias-def)*
 ```
 
 ### Identifiers and Keywords
@@ -50,11 +61,15 @@ toplevel := (operation | attribute-alias-def | type-alias-def)*
 bare-id ::= (letter|[_]) (letter|digit|[_$.])*
 bare-id-list ::= bare-id (`,` bare-id)*
 value-id ::= `%` suffix-id
-alias-name :: = bare-id
+alias-name ::= bare-id
 suffix-id ::= (digit+ | ((letter|id-punct) (letter|id-punct|digit)*))
 
 symbol-ref-id ::= `@` (suffix-id | string-literal) (`::` symbol-ref-id)?
 value-id-list ::= value-id (`,` value-id)*
+
+// Value uses
+value-use ::= value-id
+value-use-list ::= value-use (`,` value-use)*
 ```
 
 ## Operations
@@ -62,7 +77,7 @@ value-id-list ::= value-id (`,` value-id)*
 ```
 operation             ::= op-result-list? (generic-operation | custom-operation)
                           trailing-location?
-generic-operation     ::= string-literal `(` value-use-list? `)`  successor-list?
+generic-operation     ::= string-literal `(` value-use-list? `)` successor-list?
                           dictionary-properties? region-list? dictionary-attribute?
                           `:` function-type
 custom-operation      ::= bare-id custom-operation-format
@@ -74,20 +89,37 @@ dictionary-properties ::= `<` dictionary-attribute `>`
 region-list           ::= `(` region (`,` region)* `)`
 dictionary-attribute  ::= `{` (attribute-entry (`,` attribute-entry)*)? `}`
 trailing-location     ::= `loc` `(` location `)`
+
+// Custom operation format is dialect-specific and flexible
 ```
 
 **Note:** uvir excludes successor-list and block operations, so successor-list will always be empty.
+
+### Location Information
+
+```
+location ::= filelinecol-location | name-location | callsite-location | fused-location | unknown-location
+filelinecol-location ::= string-literal `:` integer-literal `:` integer-literal
+name-location ::= string-literal (`(` location `)`)?  
+callsite-location ::= location `at` location
+fused-location ::= `fused` (`<` attribute-value `>`)? `[` location (`,` location)* `]`
+unknown-location ::= `unknown`
+```
 
 ## Regions (Simplified for uvir)
 
 uvir only supports IsolatedFromAbove regions with structured control flow (no blocks/branches).
 
 ```
-region      ::= `{` entry-block? operation* `}`
-entry-block ::= operation+
+region      ::= `{` block* `}`
+block       ::= block-label? operation*
+block-label ::= caret-id block-arg-list? `:`
+caret-id    ::= `^` suffix-id  
+block-arg-list ::= `(` block-arg (`,` block-arg)* `)`
+block-arg   ::= value-id `:` type
 ```
 
-**Note:** Since uvir doesn't support multiple blocks, regions are simplified to contain only operations directly.
+**Note:** Since uvir doesn't support multiple blocks, regions are simplified to contain only operations directly. The block syntax above is included for completeness but uvir regions will only have a single implicit entry block with no label.
 
 ## Type System
 
@@ -98,14 +130,15 @@ type-list-no-parens ::=  type (`,` type)*
 type-list-parens ::= `(` `)`
                    | `(` type-list-no-parens `)`
 
+// Type variants
+function-type ::= (type | type-list-parens) `->` (type | type-list-parens)
+
 // This is a common way to refer to a value with a specified type.
 ssa-use-and-type ::= ssa-use `:` type
 ssa-use ::= value-use
 
 // Non-empty list of names and types.
 ssa-use-and-type-list ::= ssa-use-and-type (`,` ssa-use-and-type)*
-
-function-type ::= (type | type-list-parens) `->` (type | type-list-parens)
 ```
 
 ### Type Aliases
@@ -136,12 +169,41 @@ dialect-type-contents ::= dialect-type-body
 
 ### Builtin Types
 
-Common builtin types include:
-- Integer types: `i1`, `i8`, `i16`, `i32`, `i64`, etc.
-- Unsigned integer types: `ui8`, `ui16`, `ui32`, `ui64`, etc. (though typically written as `i8`, `i16`, etc.)
-- Float types: `f16`, `f32`, `f64`, `bf16`
-- Index type: `index`
-- Function types: `(type-list) -> (type-list)`
+```
+builtin-type ::= integer-type | float-type | index-type | none-type | complex-type
+               | memref-type | tensor-type | vector-type
+
+// Signless integer types               
+integer-type ::= `i` [1-9][0-9]*
+
+// Signed integer types (less common)
+signed-integer-type ::= `si` [1-9][0-9]*
+
+// Unsigned integer types (less common)
+unsigned-integer-type ::= `ui` [1-9][0-9]*
+
+// Float types
+float-type ::= `f16` | `bf16` | `f32` | `f64` | `f80` | `f128`
+
+// Index type (platform-specific integer)
+index-type ::= `index`
+
+// None type (no value)
+none-type ::= `none`
+
+// Complex types
+complex-type ::= `complex` `<` (integer-type | float-type) `>`
+
+// Container types (not fully supported in uvir)
+memref-type ::= `memref` `<` dimension-list type (`,` memory-space)? `>`
+tensor-type ::= `tensor` `<` dimension-list type `>`  
+vector-type ::= `vector` `<` dimension-list type `>`
+
+dimension-list ::= dimension-list-ranked | dimension-list-unranked
+dimension-list-ranked ::= (dimension `x`)*
+dimension ::= `?` | integer-literal
+dimension-list-unranked ::= `*` `x`
+```
 
 ## Attributes
 
@@ -178,55 +240,124 @@ dialect-attribute-contents ::= dialect-attribute-body
 
 ### Builtin Attributes
 
-Common builtin attributes include:
-- Integer literals: `42`, `-123`
-- Float literals: `3.14`, `1.0e-5`
-- String literals: `"hello world"`
-- Array attributes: `[1, 2, 3]`
-- Dictionary attributes: `{key = value, ...}`
-- Type attributes: references to types
-- Unit attributes: `unit`
+```
+builtin-attribute ::= affine-map-attribute | affine-set-attribute | array-attribute
+                    | bool-attribute | dense-attribute | dictionary-attribute  
+                    | float-attribute | integer-attribute | integer-set-attribute
+                    | opaque-attribute | sparse-elements-attribute | string-attribute
+                    | symbol-ref-attribute | type-attribute | unit-attribute
+
+// Simple attributes
+bool-attribute ::= bool-literal
+bool-literal ::= `true` | `false`
+integer-attribute ::= integer-literal ( `:` (index-type | integer-type) )?
+float-attribute ::= float-literal ( `:` float-type )?
+string-attribute ::= string-literal ( `:` type )?
+type-attribute ::= type
+unit-attribute ::= `unit`
+
+// Container attributes
+array-attribute ::= `[` (attribute-value (`,` attribute-value)*)? `]`
+dictionary-attribute ::= `{` (attribute-entry (`,` attribute-entry)*)? `}`
+
+// Symbol references
+symbol-ref-attribute ::= symbol-ref-id
+
+// Dense elements (simplified)
+dense-attribute ::= `dense` `<` (constant-literal | array-attribute) `>` `:` shaped-type
+
+// Affine maps and sets (not fully supported in uvir)
+affine-map-attribute ::= `affine_map` `<` affine-map `>`
+affine-set-attribute ::= `affine_set` `<` affine-set `>`
+```
 
 ## Examples
 
-### Basic Operation
+### Basic Operations
 
 ```mlir
-// Generic form
+// Generic form - operation name is a string literal
 %result = "dialect.operation"(%operand1, %operand2) {attr = "value"} : (i32, i32) -> i32
 
-// Custom syntax (dialect-specific)
+// Custom syntax - dialect can define custom parsing/printing
 %result = dialect.operation %operand1, %operand2 {attr = "value"} : (i32, i32) -> i32
+
+// Operation with regions
+"dialect.op_with_region"() ({
+  ^bb0:
+    %0 = "dialect.inner"() : () -> i32
+    "dialect.terminator"(%0) : (i32) -> ()
+}) : () -> ()
+
+// Operation with multiple results  
+%res:2 = "dialect.multi_result"() : () -> (i32, f32)
+
+// Operation with successor blocks (not supported in uvir)
+"cf.br"()[^bb1] : () -> ()
 ```
 
-### Function Definition (using func dialect)
+### Function Definitions
 
 ```mlir
+// Function with func dialect
 func.func @simple_function(%arg0: i32, %arg1: i32) -> i32 {
   %0 = arith.addi %arg0, %arg1 : i32
   func.return %0 : i32
 }
-```
 
-### Type Aliases
+// Function with attributes
+func.func @attributed_function(%arg0: f32) -> f32 attributes {visibility = "public"} {
+  %0 = arith.mulf %arg0, %arg0 : f32
+  func.return %0 : f32
+}
 
-```mlir
-!my_int = i32
-!matrix = tensor<4x4xf32>
-
-func.func @use_aliases(%x: !my_int, %y: !matrix) -> !my_int {
-  // ... operations
+// Function with multiple results
+func.func @multi_result(%arg0: i32) -> (i32, i32) {
+  %0 = arith.constant 42 : i32
+  func.return %arg0, %0 : i32, i32
 }
 ```
 
-### Attribute Aliases
+### Type and Attribute Aliases
 
 ```mlir
-#map = affine_map<(d0, d1) -> (d0 + d1)>
+// Type aliases - defined with ! prefix
+!my_int = i32
+!matrix = tensor<4x4xf32>
+!vec3 = vector<3xf32>
 
-func.func @use_map(%arg0: index, %arg1: index) -> index {
-  %result = affine.apply #map(%arg0, %arg1)
-  func.return %result : index
+// Using type aliases
+func.func @use_type_aliases(%x: !my_int, %y: !matrix) -> !vec3 {
+  // ... operations
+}
+
+// Attribute aliases - defined with # prefix  
+#map = affine_map<(d0, d1) -> (d0 + d1)>
+#loc = loc("file.mlir":10:5)
+#config = {device = "gpu", threads = 256}
+
+// Using attribute aliases
+%result = "dialect.op"() {config = #config} : () -> i32 loc(#loc)
+```
+
+### Module Structure
+
+```mlir
+// Explicit module with attributes
+module @my_module attributes {version = "1.0"} {
+  // Module-level attribute and type aliases
+  !tensor_type = tensor<?x?xf32>
+  #map = affine_map<(d0, d1) -> (d0, d1)>
+  
+  // Operations within module
+  func.func @foo(%arg0: !tensor_type) -> !tensor_type {
+    func.return %arg0 : !tensor_type
+  }
+}
+
+// Implicit module (when module op is omitted)
+func.func @bar() {
+  func.return
 }
 ```
 
@@ -238,6 +369,47 @@ func.func @use_map(%arg0: index, %arg1: index) -> index {
 4. **IsolatedFromAbove Regions**: All regions are isolated from their containing scope
 5. **Single Block Regions**: Each region contains at most one implicit block
 
+## Additional Grammar Elements
+
+### Dialect Operations
+
+Each dialect can define custom operation syntax. Common patterns:
+
+```mlir
+// Arithmetic dialect
+%sum = arith.addi %a, %b : i32
+%prod = arith.mulf %x, %y : f32
+
+// SCF (Structured Control Flow) dialect  
+scf.for %i = %c0 to %c10 step %c1 {
+  // loop body
+}
+
+scf.if %condition {
+  // then region
+} else {
+  // else region
+}
+
+// Affine dialect
+affine.for %i = 0 to 10 {
+  // affine loop body
+}
+```
+
+### Special Syntax Elements
+
+```
+// Variadic operands/results
+variadic-list ::= value-use (`,` value-use)*
+
+// Optional groups in custom syntax
+optional-group ::= `(` elements `)` `?`
+
+// Custom directives for operation printing
+custom-directive ::= `custom` `<` directive-name `>` `(` parameters `)`
+```
+
 ## Compliance Notes
 
 uvir aims to be compatible with the textual MLIR format except for the limitations listed above. This means:
@@ -247,4 +419,6 @@ uvir aims to be compatible with the textual MLIR format except for the limitatio
 - Operation syntax follows MLIR conventions
 - Parsing and printing should round-trip correctly
 - Comments are supported using `//` syntax
-- String escaping follows MLIR rules 
+- String escaping follows MLIR rules
+- Location tracking is optional but supported
+- Module structure can be implicit or explicit 

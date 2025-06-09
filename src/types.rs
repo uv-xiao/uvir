@@ -21,6 +21,12 @@ pub enum TypeKind {
     Integer { width: u32, signed: bool },
     Float { precision: FloatPrecision },
     Function { inputs: Vec<TypeId>, outputs: Vec<TypeId> },
+    Index,
+    None,
+    Complex { element_type: TypeId },
+    Vector { shape: Vec<i64>, element_type: TypeId },
+    Tensor { shape: Vec<Option<i64>>, element_type: TypeId },
+    MemRef { shape: Vec<Option<i64>>, element_type: TypeId, memory_space: Option<u64> },
     Dialect { 
         dialect: StringId,
         data: TypeStorage,

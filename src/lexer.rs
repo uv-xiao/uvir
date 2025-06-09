@@ -143,6 +143,22 @@ pub enum Token {
     #[token("index")]
     Index,
     
+    // More builtin types
+    #[token("none")]
+    None,
+    
+    #[token("complex")]
+    Complex,
+    
+    #[token("memref")]
+    Memref,
+    
+    #[token("tensor")]
+    Tensor,
+    
+    #[token("vector")]
+    Vector,
+    
     // Generic integer/unsigned types
     #[regex(r"i[0-9]+", |lex| {
         let s = &lex.slice()[1..];
@@ -155,10 +171,64 @@ pub enum Token {
         s.parse::<u32>().ok()
     })]
     GenericUnsigned(u32),
+    
+    #[regex(r"si[0-9]+", |lex| {
+        let s = &lex.slice()[2..];
+        s.parse::<u32>().ok()
+    })]
+    GenericSigned(u32),
 
-    // Location keyword
+    // Keywords
+    #[token("module")]
+    Module,
+    
+    #[token("func")]
+    Func,
+    
+    #[token("return")]
+    Return,
+    
     #[token("loc")]
     Loc,
+    
+    #[token("true")]
+    True,
+    
+    #[token("false")]
+    False,
+    
+    #[token("unit")]
+    Unit,
+    
+    #[token("dense")]
+    Dense,
+    
+    #[token("sparse")]
+    Sparse,
+    
+    #[token("affine_map")]
+    AffineMap,
+    
+    #[token("affine_set")]
+    AffineSet,
+    
+    // Special symbols
+    #[token("^")]
+    Caret,
+    
+    #[token("?")]
+    Question,
+    
+    #[token("*")]
+    Star,
+    
+    #[token("x")]
+    X,
+    
+    // Dimension specification tokens for tensor/vector/memref shapes
+    // Matches patterns like "4x8xf32", "?x10xf32", "*x", etc.
+    #[regex(r"(\?|[0-9]+|\*)x", |lex| lex.slice().to_string())]
+    DimensionPrefix(String),
 
     // Comments and whitespace (skip)
     #[regex(r"//[^\r\n]*", logos::skip)]
@@ -176,7 +246,9 @@ impl Token {
             Token::I1 | Token::I8 | Token::I16 | Token::I32 | Token::I64 |
             Token::U8 | Token::U16 | Token::U32 | Token::U64 |
             Token::F16 | Token::F32 | Token::F64 | Token::BF16 |
-            Token::Index | Token::GenericInteger(_) | Token::GenericUnsigned(_) |
+            Token::Index | Token::None | Token::Complex | Token::Memref | 
+            Token::Tensor | Token::Vector |
+            Token::GenericInteger(_) | Token::GenericUnsigned(_) | Token::GenericSigned(_) |
             Token::Bang // For dialect types starting with !
         )
     }
@@ -200,7 +272,7 @@ mod tests {
     fn test_basic_tokens() {
         let mut lex = Token::lexer("func.call %0, %arg1 : (i32, i32) -> i32");
         
-        assert_eq!(lex.next(), Some(Ok(Token::BareId("func".to_string()))));
+        assert_eq!(lex.next(), Some(Ok(Token::Func)));
         assert_eq!(lex.next(), Some(Ok(Token::Dot)));
         assert_eq!(lex.next(), Some(Ok(Token::BareId("call".to_string()))));
         assert_eq!(lex.next(), Some(Ok(Token::ValueId("0".to_string()))));
