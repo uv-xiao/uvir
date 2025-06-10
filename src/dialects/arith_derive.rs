@@ -16,7 +16,7 @@ pub struct ConstantOp {
 
 // Add operation - adds two integers
 #[derive(Op, Clone, Debug)]
-#[operation(dialect = "arith", name = "addi", traits = "Commutative")]
+#[operation(dialect = "arith", name = "addi", traits = "Commutative,SameTy")]
 pub struct AddOp {
     #[_use]
     pub lhs: Val,
@@ -28,7 +28,7 @@ pub struct AddOp {
 
 // Multiply operation - multiplies two integers
 #[derive(Op, Clone, Debug)]
-#[operation(dialect = "arith", name = "muli", traits = "Commutative")]
+#[operation(dialect = "arith", name = "muli", traits = "Commutative,SameTy")]
 pub struct MulOp {
     #[_use]
     pub lhs: Val,

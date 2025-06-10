@@ -10,6 +10,7 @@ pub mod printer;
 pub mod context;
 pub mod dialects;
 pub mod pass;
+pub mod verification;
 
 // Re-export macros
 pub use uvir_macros::{Op, DialectType};

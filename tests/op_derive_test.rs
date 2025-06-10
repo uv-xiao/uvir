@@ -177,6 +177,8 @@ mod tests {
 
     #[test]
     fn test_same_type_constraint() {
+        use uvir::verification::verify_operation;
+        
         let mut ctx = Context::new();
         let _region = ctx.create_region();
         
@@ -195,9 +197,12 @@ mod tests {
         
         let op_data = op.into_op_data(&mut ctx);
         
-        // Verify operation should succeed
+        // Basic structural verification should succeed
         let verify_result = (SameTypeOp::info().verify)(&op_data);
         assert!(verify_result.is_ok());
+        
+        // Full verification with type checking should succeed
+        assert!(verify_operation(&op_data, &ctx).is_ok());
         
         // Test with mismatched types
         let ty2 = integer_type(&mut ctx, 64, true);
@@ -210,9 +215,17 @@ mod tests {
         };
         
         let bad_op_data = bad_op.into_op_data(&mut ctx);
-        let _verify_result = (SameTypeOp::info().verify)(&bad_op_data);
-        // TODO: Should fail once SameTy trait verification is implemented
-        // assert!(verify_result.is_err());
+        
+        // Basic verification should still pass
+        let basic_verify = (SameTypeOp::info().verify)(&bad_op_data);
+        assert!(basic_verify.is_ok());
+        
+        // But full verification should fail due to SameTy violation
+        let full_verify = verify_operation(&bad_op_data, &ctx);
+        assert!(full_verify.is_err());
+        if let Err(Error::VerificationError(msg)) = full_verify {
+            assert!(msg.contains("SameTy"));
+        }
     }
 
     #[test]

@@ -19,7 +19,7 @@ fn test_arith_ops_basic() {
     
     assert_eq!(op_data.info.dialect, "arith");
     assert_eq!(op_data.info.name, "addi");
-    assert_eq!(op_data.info.traits, &["Commutative"]);
+    assert_eq!(op_data.info.traits, &["Commutative", "SameTy"]);
     assert_eq!(op_data.operands.len(), 2);
     assert_eq!(op_data.results.len(), 1);
     
@@ -29,7 +29,7 @@ fn test_arith_ops_basic() {
     
     assert_eq!(mul_data.info.dialect, "arith");
     assert_eq!(mul_data.info.name, "muli");
-    assert_eq!(mul_data.info.traits, &["Commutative"]);
+    assert_eq!(mul_data.info.traits, &["Commutative", "SameTy"]);
     
     // Test SubOp (not commutative)
     let sub_op = SubOp { lhs: a, rhs: b, result };
@@ -183,4 +183,45 @@ fn test_overflow_operation() {
     assert_eq!(op_data.info.name, "addui_extended");
     assert_eq!(op_data.operands.len(), 2);
     assert_eq!(op_data.results.len(), 2); // sum and overflow flag
+}
+
+#[test]
+fn test_same_type_verification() {
+    use uvir::verification::verify_operation;
+    
+    let mut ctx = Context::new();
+    
+    // Test AddOp with matching types - should pass
+    let i32_ty = integer_type(&mut ctx, 32, true);
+    let a = ctx.create_value(Some("a"), i32_ty);
+    let b = ctx.create_value(Some("b"), i32_ty);
+    let result = ctx.create_value(Some("result"), i32_ty);
+    
+    let add_op = AddOp { lhs: a, rhs: b, result };
+    let op_data = add_op.into_op_data(&mut ctx);
+    
+    // Should pass verification
+    assert!(verify_operation(&op_data, &ctx).is_ok());
+    
+    // Test AddOp with mismatched types - should fail
+    let i64_ty = integer_type(&mut ctx, 64, true);
+    let c = ctx.create_value(Some("c"), i64_ty);
+    
+    let bad_add = AddOp { lhs: a, rhs: c, result };
+    let bad_data = bad_add.into_op_data(&mut ctx);
+    
+    // Should fail verification
+    let verify_result = verify_operation(&bad_data, &ctx);
+    assert!(verify_result.is_err());
+    if let Err(Error::VerificationError(msg)) = verify_result {
+        assert!(msg.contains("SameTy"));
+    }
+    
+    // Test MulOp with different result type - should fail
+    let result_64 = ctx.create_value(Some("result64"), i64_ty);
+    let bad_mul = MulOp { lhs: a, rhs: b, result: result_64 };
+    let bad_mul_data = bad_mul.into_op_data(&mut ctx);
+    
+    let verify_result = verify_operation(&bad_mul_data, &ctx);
+    assert!(verify_result.is_err());
 }

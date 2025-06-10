@@ -155,11 +155,8 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                 ));
             }
             
-            // Trait verification
-            // Note: Without access to Context, we cannot verify type constraints like SameTy
-            // This would need to be done at a higher level where Context is available
-            
-            // For now, we can only verify structural properties
+            // Note: Type constraints and traits that require type information
+            // are verified separately in the verification module with Context access
             
             Ok(())
         }

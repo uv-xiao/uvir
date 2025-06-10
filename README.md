@@ -26,7 +26,6 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
    - [x] Use it for all dialects: arith, builtin, scf, affine, func
 - [ ] Operation check is not tested.
 - [ ] Finish the pass system and test it. 
-- [ ] Add a test for the pass system.
 
 ## Core Infrastructure
 
