@@ -1,10 +1,10 @@
-use std::fmt::Write;
-use crate::error::Result;
-use crate::context::Context;
-use crate::ops::{OpData, Val};
-use crate::types::{TypeId, TypeKind, FloatPrecision};
 use crate::attribute::Attribute;
+use crate::context::Context;
+use crate::error::Result;
+use crate::ops::{OpData, Val};
 use crate::region::RegionId;
+use crate::types::{FloatPrecision, TypeId, TypeKind};
+use std::fmt::Write;
 
 pub struct Printer {
     output: String,
@@ -63,10 +63,13 @@ impl Printer {
             if let Some(value) = region.get_value(val) {
                 if let Some(name) = value.name {
                     if let Some(name_str) = ctx.get_string(name) {
-                        write!(&mut self.output, "%{}", name_str)
-                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                        write!(&mut self.output, "%{}", name_str).map_err(|_| {
+                            crate::error::Error::InternalError("Write error".to_string())
+                        })
                     } else {
-                        Err(crate::error::Error::InternalError("Unknown StringId".to_string()))
+                        Err(crate::error::Error::InternalError(
+                            "Unknown StringId".to_string(),
+                        ))
                     }
                 } else {
                     // Use a numeric name based on the slot map key
@@ -74,10 +77,14 @@ impl Printer {
                         .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
                 }
             } else {
-                Err(crate::error::Error::InternalError("Unknown Val in region".to_string()))
+                Err(crate::error::Error::InternalError(
+                    "Unknown Val in region".to_string(),
+                ))
             }
         } else {
-            Err(crate::error::Error::InternalError("Unknown region".to_string()))
+            Err(crate::error::Error::InternalError(
+                "Unknown region".to_string(),
+            ))
         }
     }
 
@@ -85,14 +92,12 @@ impl Printer {
     pub fn print_type(&mut self, ctx: &Context, ty: TypeId) -> Result<()> {
         if let Some(type_kind) = ctx.get_type(ty) {
             match type_kind {
-                TypeKind::Integer { width, signed } => {
-                    if *signed || *width == 1 {
-                        write!(&mut self.output, "i{}", width)
-                    } else {
-                        write!(&mut self.output, "u{}", width)
-                    }
-                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                TypeKind::Integer { width, signed } => if *signed || *width == 1 {
+                    write!(&mut self.output, "i{}", width)
+                } else {
+                    write!(&mut self.output, "u{}", width)
                 }
+                .map_err(|_| crate::error::Error::InternalError("Write error".to_string())),
                 TypeKind::Float { precision } => {
                     let s = match precision {
                         FloatPrecision::Half => "f16",
@@ -110,7 +115,7 @@ impl Printer {
                         self.print_type(ctx, input)?;
                     }
                     self.print(") -> ")?;
-                    
+
                     if outputs.len() == 1 {
                         self.print_type(ctx, outputs[0])
                     } else {
@@ -131,14 +136,18 @@ impl Printer {
                     self.print_type(ctx, *element_type)?;
                     self.print(">")
                 }
-                TypeKind::Vector { shape, element_type } => {
+                TypeKind::Vector {
+                    shape,
+                    element_type,
+                } => {
                     self.print("vector<")?;
                     for (i, &dim) in shape.iter().enumerate() {
                         if i > 0 {
                             self.print("x")?;
                         }
-                        write!(&mut self.output, "{}", dim)
-                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?;
+                        write!(&mut self.output, "{}", dim).map_err(|_| {
+                            crate::error::Error::InternalError("Write error".to_string())
+                        })?;
                     }
                     if !shape.is_empty() {
                         self.print("x")?;
@@ -146,15 +155,19 @@ impl Printer {
                     self.print_type(ctx, *element_type)?;
                     self.print(">")
                 }
-                TypeKind::Tensor { shape, element_type } => {
+                TypeKind::Tensor {
+                    shape,
+                    element_type,
+                } => {
                     self.print("tensor<")?;
                     for (i, dim) in shape.iter().enumerate() {
                         if i > 0 {
                             self.print("x")?;
                         }
                         match dim {
-                            Some(d) => write!(&mut self.output, "{}", d)
-                                .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?,
+                            Some(d) => write!(&mut self.output, "{}", d).map_err(|_| {
+                                crate::error::Error::InternalError("Write error".to_string())
+                            })?,
                             None => self.print("?")?,
                         }
                     }
@@ -164,15 +177,20 @@ impl Printer {
                     self.print_type(ctx, *element_type)?;
                     self.print(">")
                 }
-                TypeKind::MemRef { shape, element_type, memory_space } => {
+                TypeKind::MemRef {
+                    shape,
+                    element_type,
+                    memory_space,
+                } => {
                     self.print("memref<")?;
                     for (i, dim) in shape.iter().enumerate() {
                         if i > 0 {
                             self.print("x")?;
                         }
                         match dim {
-                            Some(d) => write!(&mut self.output, "{}", d)
-                                .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?,
+                            Some(d) => write!(&mut self.output, "{}", d).map_err(|_| {
+                                crate::error::Error::InternalError("Write error".to_string())
+                            })?,
                             None => self.print("?")?,
                         }
                     }
@@ -181,48 +199,50 @@ impl Printer {
                     }
                     self.print_type(ctx, *element_type)?;
                     if let Some(space) = memory_space {
-                        write!(&mut self.output, ", {}", space)
-                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))?;
+                        write!(&mut self.output, ", {}", space).map_err(|_| {
+                            crate::error::Error::InternalError("Write error".to_string())
+                        })?;
                     }
                     self.print(">")
                 }
                 TypeKind::Dialect { dialect, data: _ } => {
                     // For now, just print the dialect name
                     if let Some(dialect_name) = ctx.get_string(*dialect) {
-                        write!(&mut self.output, "!{}.type", dialect_name)
-                            .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                        write!(&mut self.output, "!{}.type", dialect_name).map_err(|_| {
+                            crate::error::Error::InternalError("Write error".to_string())
+                        })
                     } else {
-                        Err(crate::error::Error::InternalError("Unknown dialect".to_string()))
+                        Err(crate::error::Error::InternalError(
+                            "Unknown dialect".to_string(),
+                        ))
                     }
                 }
             }
         } else {
-            Err(crate::error::Error::InternalError("Unknown type".to_string()))
+            Err(crate::error::Error::InternalError(
+                "Unknown type".to_string(),
+            ))
         }
     }
 
     // Print an attribute
     pub fn print_attribute(&mut self, ctx: &Context, attr: &Attribute) -> Result<()> {
         match attr {
-            Attribute::Integer(i) => {
-                write!(&mut self.output, "{}", i)
-                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
-            }
-            Attribute::Float(f) => {
-                write!(&mut self.output, "{}", f)
-                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
-            }
+            Attribute::Integer(i) => write!(&mut self.output, "{}", i)
+                .map_err(|_| crate::error::Error::InternalError("Write error".to_string())),
+            Attribute::Float(f) => write!(&mut self.output, "{}", f)
+                .map_err(|_| crate::error::Error::InternalError("Write error".to_string())),
             Attribute::String(s) => {
                 if let Some(string) = ctx.get_string(*s) {
                     write!(&mut self.output, "\"{}\"", string.escape_default())
                         .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
                 } else {
-                    Err(crate::error::Error::InternalError("Unknown string".to_string()))
+                    Err(crate::error::Error::InternalError(
+                        "Unknown string".to_string(),
+                    ))
                 }
             }
-            Attribute::Type(ty) => {
-                self.print_type(ctx, *ty)
-            }
+            Attribute::Type(ty) => self.print_type(ctx, *ty),
             Attribute::Array(elements) => {
                 self.print("[")?;
                 for (i, elem) in elements.iter().enumerate() {
@@ -239,7 +259,9 @@ impl Printer {
                     write!(&mut self.output, "#{}.<attr>", dialect_name)
                         .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
                 } else {
-                    Err(crate::error::Error::InternalError("Unknown dialect".to_string()))
+                    Err(crate::error::Error::InternalError(
+                        "Unknown dialect".to_string(),
+                    ))
                 }
             }
         }
@@ -249,7 +271,7 @@ impl Printer {
     pub fn print_operation(&mut self, ctx: &Context, op: &OpData) -> Result<()> {
         // Determine if this operation should be printed in generic form
         let use_generic_form = false; // TODO: Add logic to determine when to use generic form
-        
+
         // Print results if any
         if !op.results.is_empty() {
             for (i, &result) in op.results.iter().enumerate() {
@@ -275,14 +297,14 @@ impl Printer {
             } else if !op.operands.is_empty() {
                 self.print(" ")?;
             }
-            
+
             for (i, &operand) in op.operands.iter().enumerate() {
                 if i > 0 {
                     self.print(", ")?;
                 }
                 self.print_value(ctx, operand)?;
             }
-            
+
             if use_generic_form {
                 self.print(")")?;
             }
@@ -315,19 +337,19 @@ impl Printer {
         // 1. Always for generic operations
         // 2. For operations that require type disambiguation
         // 3. Not for terminators or other operations where types are implied
-        let should_print_types = use_generic_form || 
-            self.operation_needs_type_signature(op.info.name);
+        let should_print_types =
+            use_generic_form || self.operation_needs_type_signature(op.info.name);
 
         if should_print_types {
             self.print(" : ")?;
-            
+
             // Print function type
             self.print_function_type(ctx, op)?;
         }
 
         Ok(())
     }
-    
+
     // Helper to determine if an operation needs type signature
     fn operation_needs_type_signature(&self, op_name: &str) -> bool {
         // Common operations that don't need type signatures in custom form
@@ -337,7 +359,7 @@ impl Printer {
             _ => true,
         }
     }
-    
+
     // Helper to print function type signature
     fn print_function_type(&mut self, ctx: &Context, op: &OpData) -> Result<()> {
         // Print operand types
@@ -363,9 +385,9 @@ impl Printer {
             }
             self.print(")")?;
         }
-        
+
         self.print(" -> ")?;
-        
+
         // Print result types
         if op.results.is_empty() {
             self.print("()")?;
@@ -389,7 +411,7 @@ impl Printer {
             }
             self.print(")")?;
         }
-        
+
         Ok(())
     }
 

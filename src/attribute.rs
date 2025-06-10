@@ -25,10 +25,7 @@ impl AttributeStorage {
     pub fn new<T: DialectAttribute>(value: T) -> Self {
         let mut data = SmallVec::new();
         let bytes = unsafe {
-            std::slice::from_raw_parts(
-                &value as *const T as *const u8,
-                std::mem::size_of::<T>(),
-            )
+            std::slice::from_raw_parts(&value as *const T as *const u8, std::mem::size_of::<T>())
         };
         data.extend_from_slice(bytes);
         std::mem::forget(value);
@@ -129,10 +126,11 @@ macro_rules! impl_dialect_attribute {
     ($type:ty) => {
         impl $crate::attribute::DialectAttribute for $type {
             fn vtable() -> &'static $crate::attribute::AttributeVTable {
-                use std::any::TypeId;
                 use smallvec::SmallVec;
-                
-                static VTABLE: std::sync::OnceLock<$crate::attribute::AttributeVTable> = std::sync::OnceLock::new();
+                use std::any::TypeId;
+
+                static VTABLE: std::sync::OnceLock<$crate::attribute::AttributeVTable> =
+                    std::sync::OnceLock::new();
                 VTABLE.get_or_init(|| $crate::attribute::AttributeVTable {
                     type_id: TypeId::of::<$type>(),
                     name: stringify!($type),
@@ -156,10 +154,8 @@ macro_rules! impl_dialect_attribute {
                         a == b
                     },
                     drop_fn: if std::mem::needs_drop::<$type>() {
-                        Some(|data| {
-                            unsafe {
-                                std::ptr::drop_in_place(data.as_mut_ptr() as *mut $type);
-                            }
+                        Some(|data| unsafe {
+                            std::ptr::drop_in_place(data.as_mut_ptr() as *mut $type);
                         })
                     } else {
                         None

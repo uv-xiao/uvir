@@ -1,8 +1,8 @@
-use crate::types::{TypeId, TypeKind, FloatPrecision};
-use crate::parser::Parser;
-use crate::printer::Printer;
 use crate::error::Result;
 use crate::impl_dialect_type;
+use crate::parser::Parser;
+use crate::printer::Printer;
+use crate::types::{FloatPrecision, TypeId, TypeKind};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct IntegerType {
@@ -14,7 +14,9 @@ impl IntegerType {
     pub fn parse(_parser: &mut Parser) -> Result<Self> {
         // TODO: Implement dialect-specific type parsing with new token-based parser
         // For now, built-in types are handled directly by the lexer
-        Err(crate::error::Error::ParseError("Not implemented yet".to_string()))
+        Err(crate::error::Error::ParseError(
+            "Not implemented yet".to_string(),
+        ))
     }
 
     pub fn print(&self, printer: &mut Printer) -> Result<()> {
@@ -33,7 +35,9 @@ impl UnsignedType {
     pub fn parse(_parser: &mut Parser) -> Result<Self> {
         // TODO: Implement dialect-specific type parsing with new token-based parser
         // For now, built-in types are handled directly by the lexer
-        Err(crate::error::Error::ParseError("Not implemented yet".to_string()))
+        Err(crate::error::Error::ParseError(
+            "Not implemented yet".to_string(),
+        ))
     }
 
     pub fn print(&self, printer: &mut Printer) -> Result<()> {
@@ -52,7 +56,9 @@ impl FloatType {
     pub fn parse(_parser: &mut Parser) -> Result<Self> {
         // TODO: Implement dialect-specific type parsing with new token-based parser
         // For now, built-in types are handled directly by the lexer
-        Err(crate::error::Error::ParseError("Not implemented yet".to_string()))
+        Err(crate::error::Error::ParseError(
+            "Not implemented yet".to_string(),
+        ))
     }
 
     pub fn print(&self, printer: &mut Printer) -> Result<()> {
@@ -75,6 +81,10 @@ pub fn float_type(ctx: &mut crate::Context, precision: FloatPrecision) -> TypeId
     ctx.intern_type(TypeKind::Float { precision })
 }
 
-pub fn function_type(ctx: &mut crate::Context, inputs: Vec<TypeId>, outputs: Vec<TypeId>) -> TypeId {
+pub fn function_type(
+    ctx: &mut crate::Context,
+    inputs: Vec<TypeId>,
+    outputs: Vec<TypeId>,
+) -> TypeId {
     ctx.intern_type(TypeKind::Function { inputs, outputs })
 }

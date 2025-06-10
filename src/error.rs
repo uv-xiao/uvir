@@ -4,22 +4,22 @@ use thiserror::Error;
 pub enum Error {
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     #[error("Verification error: {0}")]
     VerificationError(String),
-    
+
     #[error("Type error: {0}")]
     TypeError(String),
-    
+
     #[error("Invalid operation: {0}")]
     InvalidOperation(String),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Invalid region: {0}")]
     InvalidRegion(String),
-    
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }

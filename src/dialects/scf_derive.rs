@@ -15,7 +15,7 @@ pub struct ForOp {
     #[_use]
     pub step: Val,
     #[_def]
-    pub results: Val,  // Can be multiple in real MLIR
+    pub results: Val, // Can be multiple in real MLIR
     #[_region]
     pub body: RegionId,
 }
@@ -27,11 +27,11 @@ pub struct IfOp {
     #[_use]
     pub condition: Val,
     #[_def]
-    pub results: Val,  // Can be multiple in real MLIR
+    pub results: Val, // Can be multiple in real MLIR
     #[_region]
     pub then_region: RegionId,
     #[_region]
-    pub else_region: RegionId,  // Optional in real MLIR
+    pub else_region: RegionId, // Optional in real MLIR
 }
 
 // While loop operation
@@ -39,13 +39,13 @@ pub struct IfOp {
 #[operation(dialect = "scf", name = "while")]
 pub struct WhileOp {
     #[_use]
-    pub init_args: Val,  // Initial values
+    pub init_args: Val, // Initial values
     #[_def]
-    pub results: Val,    // Results after loop
+    pub results: Val, // Results after loop
     #[_region]
-    pub before_region: RegionId,  // Condition check region
+    pub before_region: RegionId, // Condition check region
     #[_region]
-    pub after_region: RegionId,   // Loop body region
+    pub after_region: RegionId, // Loop body region
 }
 
 // Yield operation - terminator for SCF regions
@@ -53,7 +53,7 @@ pub struct WhileOp {
 #[operation(dialect = "scf", name = "yield")]
 pub struct YieldOp {
     #[_use]
-    pub operands: Val,  // Values to yield (can be multiple)
+    pub operands: Val, // Values to yield (can be multiple)
 }
 
 // Condition operation - used in while loops
@@ -61,9 +61,9 @@ pub struct YieldOp {
 #[operation(dialect = "scf", name = "condition")]
 pub struct ConditionOp {
     #[_use]
-    pub condition: Val,  // Boolean condition
+    pub condition: Val, // Boolean condition
     #[_use]
-    pub args: Val,       // Arguments to pass (can be multiple)
+    pub args: Val, // Arguments to pass (can be multiple)
 }
 
 // Execute region operation - executes a region exactly once
@@ -71,7 +71,7 @@ pub struct ConditionOp {
 #[operation(dialect = "scf", name = "execute_region")]
 pub struct ExecuteRegionOp {
     #[_def]
-    pub results: Val,  // Results from the region
+    pub results: Val, // Results from the region
     #[_region]
     pub body: RegionId,
 }
@@ -81,11 +81,11 @@ pub struct ExecuteRegionOp {
 #[operation(dialect = "scf", name = "parallel")]
 pub struct ParallelOp {
     #[_use]
-    pub lower_bounds: Val,  // Can be multiple
+    pub lower_bounds: Val, // Can be multiple
     #[_use]
-    pub upper_bounds: Val,  // Can be multiple
+    pub upper_bounds: Val, // Can be multiple
     #[_use]
-    pub steps: Val,         // Can be multiple
+    pub steps: Val, // Can be multiple
     #[_region]
     pub body: RegionId,
 }

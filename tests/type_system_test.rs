@@ -174,7 +174,6 @@ uvir::impl_dialect_type!(CustomType);
 
 #[test]
 fn test_custom_dialect_type() {
-
     let mut ctx = Context::new();
     let dialect_name = ctx.intern_string("test_dialect");
 
@@ -184,7 +183,6 @@ fn test_custom_dialect_type() {
         name: "test".to_string(),
     };
     let storage = TypeStorage::new(custom);
-
 
     let type_kind = TypeKind::Dialect {
         dialect: dialect_name,

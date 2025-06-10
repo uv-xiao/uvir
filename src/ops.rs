@@ -1,14 +1,14 @@
 use std::fmt::Display;
 
-use crate::string_interner::StringId;
-use crate::types::TypeId;
+use crate::attribute::AttributeMap;
+use crate::error::Result;
 use crate::parser::Parser;
 use crate::printer::Printer;
-use crate::error::Result;
 use crate::region::RegionId;
-use crate::attribute::AttributeMap;
-use smallvec::SmallVec;
+use crate::string_interner::StringId;
+use crate::types::TypeId;
 use slotmap::new_key_type;
+use smallvec::SmallVec;
 
 // Inventory collection for automatic operation registration
 inventory::collect!(&'static OpInfo);
@@ -39,7 +39,7 @@ pub struct OpInfo {
 pub struct OpData {
     pub info: &'static OpInfo,
     pub operands: SmallVec<[Val; 2]>,
-    pub results: SmallVec<[Val; 1]>, 
+    pub results: SmallVec<[Val; 1]>,
     pub attributes: AttributeMap,
     pub regions: SmallVec<[RegionId; 1]>,
     pub custom_data: OpStorage,
@@ -68,18 +68,13 @@ impl OpStorage {
     pub fn write<T: 'static>(&mut self, value: &T) {
         self.data.clear();
         let bytes = unsafe {
-            std::slice::from_raw_parts(
-                value as *const T as *const u8,
-                std::mem::size_of::<T>(),
-            )
+            std::slice::from_raw_parts(value as *const T as *const u8, std::mem::size_of::<T>())
         };
         self.data.extend_from_slice(bytes);
-        
+
         if std::mem::needs_drop::<T>() {
-            self.drop_fn = Some(|data| {
-                unsafe {
-                    std::ptr::drop_in_place(data.as_mut_ptr() as *mut T);
-                }
+            self.drop_fn = Some(|data| unsafe {
+                std::ptr::drop_in_place(data.as_mut_ptr() as *mut T);
             });
         }
     }
@@ -127,17 +122,20 @@ impl OpRegistry {
         self.ops.get(&(dialect, name)).copied()
     }
 
-    pub fn register_builtin_ops(&mut self, string_interner: &mut crate::string_interner::StringInterner) {
+    pub fn register_builtin_ops(
+        &mut self,
+        string_interner: &mut crate::string_interner::StringInterner,
+    ) {
         // Register all operations collected by inventory
         for info in inventory::iter::<&'static OpInfo> {
             let dialect = string_interner.intern(info.dialect);
             let name = string_interner.intern(info.name);
             self.register(dialect, name, *info);
         }
-        
+
         // Also register manually defined ops
-        use crate::dialects::arith::{ConstantOp, AddOp, MulOp};
-        
+        use crate::dialects::arith::{AddOp, ConstantOp, MulOp};
+
         for info in &[ConstantOp::INFO, AddOp::INFO, MulOp::INFO] {
             let dialect = string_interner.intern(info.dialect);
             let name = string_interner.intern(info.name);

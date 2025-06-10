@@ -585,9 +585,7 @@ fn test_mlir_function_definition_tokens() {
     let token_checks = vec![
         (
             "func keyword",
-            tokens
-                .iter()
-                .any(|t| matches!(t, Token::Func)),
+            tokens.iter().any(|t| matches!(t, Token::Func)),
         ),
         (
             "BareId(addi)",
@@ -597,9 +595,7 @@ fn test_mlir_function_definition_tokens() {
         ),
         (
             "return keyword",
-            tokens
-                .iter()
-                .any(|t| matches!(t, Token::Return)),
+            tokens.iter().any(|t| matches!(t, Token::Return)),
         ),
         (
             "SymbolRef",

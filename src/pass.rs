@@ -1,19 +1,17 @@
 use crate::context::Context;
-use crate::ops::{OpData, Val, Opr};
-use crate::region::RegionId;
 use crate::error::Result;
-use std::collections::{HashMap, VecDeque};
+use crate::ops::{OpData, Opr, Val};
+use crate::region::RegionId;
 use ahash::AHashSet;
+use std::collections::{HashMap, VecDeque};
 
 // Pattern-based rewriting trait
 pub trait RewritePattern: 'static {
-    fn benefit(&self) -> usize { 1 } // Priority
-    
-    fn match_and_rewrite(
-        &self,
-        op: Opr,
-        rewriter: &mut PatternRewriter,
-    ) -> Result<bool>;
+    fn benefit(&self) -> usize {
+        1
+    } // Priority
+
+    fn match_and_rewrite(&self, op: Opr, rewriter: &mut PatternRewriter) -> Result<bool>;
 }
 
 // Rewriter with operation tracking
@@ -27,14 +25,14 @@ pub struct PatternRewriter<'a> {
 impl<'a> PatternRewriter<'a> {
     pub fn new(ctx: &'a mut Context, region: RegionId) -> Self {
         let mut worklist = VecDeque::new();
-        
+
         // Add all operations in the region to the worklist
         if let Some(region_ref) = ctx.get_region(region) {
             for (opr, _) in region_ref.iter_ops() {
                 worklist.push_back(opr);
             }
         }
-        
+
         Self {
             ctx,
             worklist,
@@ -46,7 +44,7 @@ impl<'a> PatternRewriter<'a> {
     // Replace an operation with new operations
     pub fn replace_op(&mut self, op: Opr, new_ops: &[Opr]) {
         self.erased.insert(op);
-        
+
         // Add new operations to worklist
         for &new_op in new_ops {
             self.worklist.push_back(new_op);
@@ -56,7 +54,7 @@ impl<'a> PatternRewriter<'a> {
     // Erase an operation
     pub fn erase_op(&mut self, op: Opr) {
         self.erased.insert(op);
-        
+
         if let Some(region) = self.ctx.get_region_mut(self.current_region) {
             region.remove_op(op);
         }
@@ -67,7 +65,7 @@ impl<'a> PatternRewriter<'a> {
         if let Some(region) = self.ctx.get_region_mut(self.current_region) {
             // Update all operations that use 'from' to use 'to' instead
             let ops_to_update: Vec<Opr> = region.op_order.clone();
-            
+
             for opr in ops_to_update {
                 if let Some(op) = region.get_op_mut(opr) {
                     for operand in &mut op.operands {
@@ -109,22 +107,22 @@ pub fn apply_patterns_greedy(
     region: RegionId,
 ) -> Result<bool> {
     let mut changed = false;
-    
+
     // Sort patterns by benefit (using indices to avoid cloning)
     let mut pattern_indices: Vec<usize> = (0..patterns.len()).collect();
     pattern_indices.sort_by_key(|&i| std::cmp::Reverse(patterns[i].benefit()));
-    
+
     // Fixed-point iteration
     loop {
         let mut local_changed = false;
         let mut rewriter = PatternRewriter::new(ctx, region);
-        
+
         while let Some(op) = rewriter.next_op() {
             // Skip if operation was erased
             if rewriter.erased.contains(&op) {
                 continue;
             }
-            
+
             // Try each pattern (in sorted order)
             for &idx in &pattern_indices {
                 if patterns[idx].match_and_rewrite(op, &mut rewriter)? {
@@ -133,13 +131,13 @@ pub fn apply_patterns_greedy(
                 }
             }
         }
-        
+
         if !local_changed {
             break;
         }
         changed = true;
     }
-    
+
     Ok(changed)
 }
 
@@ -204,18 +202,18 @@ impl PassManager {
         for pass in &mut self.passes {
             let name = pass.name().to_string();
             println!("Running pass: {}", name);
-            
+
             let result = pass.run(ctx)?;
-            
+
             if result.changed {
                 println!("  Pass {} made changes", name);
             }
-            
+
             for (stat_name, value) in &result.statistics {
                 println!("  {}: {}", stat_name, value);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -234,26 +232,25 @@ impl RewritePattern for ConstantFoldAddPattern {
         10 // High priority
     }
 
-    fn match_and_rewrite(
-        &self,
-        op: Opr,
-        rewriter: &mut PatternRewriter,
-    ) -> Result<bool> {
+    fn match_and_rewrite(&self, op: Opr, rewriter: &mut PatternRewriter) -> Result<bool> {
         // Get the operation
-        let region = rewriter.ctx.get_region(rewriter.current_region)
+        let region = rewriter
+            .ctx
+            .get_region(rewriter.current_region)
             .ok_or_else(|| crate::error::Error::InvalidRegion("Region not found".to_string()))?;
-        
-        let op_data = region.get_op(op)
-            .ok_or_else(|| crate::error::Error::InvalidOperation("Operation not found".to_string()))?;
-        
+
+        let op_data = region.get_op(op).ok_or_else(|| {
+            crate::error::Error::InvalidOperation("Operation not found".to_string())
+        })?;
+
         // Check if it's an add operation
         if op_data.info.dialect != "arith" || op_data.info.name != "addi" {
             return Ok(false);
         }
-        
+
         // Check if both operands are constants
         // TODO: Implement constant checking logic
-        
+
         Ok(false)
     }
 }
@@ -269,34 +266,36 @@ impl Pass for DeadCodeEliminationPass {
     fn run(&mut self, ctx: &mut Context) -> Result<PassResult> {
         let mut result = PassResult::new();
         let mut removed_count = 0;
-        
+
         // For each region
         let global_region = ctx.global_region();
         if let Some(region) = ctx.get_region_mut(global_region) {
             // Build use-def chains
             let mut value_uses: HashMap<Val, Vec<Opr>> = HashMap::new();
-            
+
             for (opr, op) in region.iter_ops() {
                 for &operand in &op.operands {
                     value_uses.entry(operand).or_insert_with(Vec::new).push(opr);
                 }
             }
-            
+
             // Find dead operations (operations whose results are never used)
-            let ops_to_remove: Vec<Opr> = region.op_order.iter()
+            let ops_to_remove: Vec<Opr> = region
+                .op_order
+                .iter()
                 .filter(|&&opr| {
                     if let Some(op) = region.get_op(opr) {
                         // Check if any result is used
-                        !op.results.iter().any(|&result| {
-                            value_uses.contains_key(&result)
-                        })
+                        !op.results
+                            .iter()
+                            .any(|&result| value_uses.contains_key(&result))
                     } else {
                         false
                     }
                 })
                 .copied()
                 .collect();
-            
+
             // Remove dead operations
             for opr in ops_to_remove {
                 region.remove_op(opr);
@@ -304,7 +303,7 @@ impl Pass for DeadCodeEliminationPass {
                 result.changed = true;
             }
         }
-        
+
         result.add_statistic("operations_removed", removed_count);
         Ok(result)
     }

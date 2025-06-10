@@ -5,16 +5,16 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 pub fn derive_op(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
-    
+
     // Parse the operation attribute
     let operation_attr = input
         .attrs
         .iter()
         .find(|attr| attr.path().is_ident("operation"))
         .expect("Missing #[operation] attribute");
-    
+
     let (dialect, op_name, traits) = parse_operation_attr(operation_attr);
-    
+
     // Parse struct fields to find defs, uses, attrs, and regions
     let fields = match &input.data {
         Data::Struct(data) => match &data.fields {
@@ -23,16 +23,16 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
         },
         _ => panic!("Op must be a struct"),
     };
-    
+
     let mut defs = Vec::new();
     let mut uses = Vec::new();
     let mut attrs = Vec::new();
     let mut regions = Vec::new();
-    
+
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let field_type = &field.ty;
-        
+
         for attr in &field.attrs {
             if attr.path().is_ident("_def") {
                 defs.push((field_name.clone(), field_type.clone(), parse_def_attr(attr)));
@@ -45,29 +45,43 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
             }
         }
     }
-    
+
     // Generate static OpInfo
-    let info_name = syn::Ident::new(&format!("{}_INFO", name.to_string().to_uppercase()), name.span());
-    let verify_fn = syn::Ident::new(&format!("{}_verify", name.to_string().to_lowercase()), name.span());
-    let parse_fn = syn::Ident::new(&format!("{}_parse", name.to_string().to_lowercase()), name.span());
-    let print_fn = syn::Ident::new(&format!("{}_print", name.to_string().to_lowercase()), name.span());
-    
+    let info_name = syn::Ident::new(
+        &format!("{}_INFO", name.to_string().to_uppercase()),
+        name.span(),
+    );
+    let verify_fn = syn::Ident::new(
+        &format!("{}_verify", name.to_string().to_lowercase()),
+        name.span(),
+    );
+    let parse_fn = syn::Ident::new(
+        &format!("{}_parse", name.to_string().to_lowercase()),
+        name.span(),
+    );
+    let print_fn = syn::Ident::new(
+        &format!("{}_print", name.to_string().to_lowercase()),
+        name.span(),
+    );
+
     let traits_array = traits.iter().map(|t| quote! { #t }).collect::<Vec<_>>();
-    
+
     let num_operands = uses.len();
     let num_results = defs.len();
-    
+
     // Generate conversion functions
     let into_op_data_operands = uses.iter().map(|(u, _)| quote! { self.#u });
     let into_op_data_results = defs.iter().map(|(d, _, _)| quote! { self.#d });
     let into_op_data_regions = regions.iter().map(|(r, _)| quote! { self.#r });
-    
+
     // Generate attribute insertion code
     let attr_insertions = attrs.iter().map(|(name, ty)| {
         let name_str = name.to_string();
         // Check if the type is already Attribute
         if let syn::Type::Path(type_path) = ty {
-            if type_path.path.segments.last().map(|s| s.ident.to_string()) == Some("Attribute".to_string()) {
+            if type_path.path.segments.last().map(|s| s.ident.to_string())
+                == Some("Attribute".to_string())
+            {
                 quote! {
                     {
                         let key = ctx.intern_string(#name_str);
@@ -89,7 +103,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
             quote! {}
         }
     });
-    
+
     let from_op_data_uses = uses.iter().enumerate().map(|(i, (u, _))| {
         quote! { #u: op.operands[#i] }
     });
@@ -100,8 +114,10 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
         let a_str = a.to_string();
         // Check if the type is already Attribute
         if let syn::Type::Path(type_path) = ty {
-            if type_path.path.segments.last().map(|s| s.ident.to_string()) == Some("Attribute".to_string()) {
-                quote! { 
+            if type_path.path.segments.last().map(|s| s.ident.to_string())
+                == Some("Attribute".to_string())
+            {
+                quote! {
                     #a: op.attributes.iter()
                         .find(|(k, _)| ctx.get_string(*k) == Some(#a_str))
                         .map(|(_, v)| v.clone())
@@ -109,7 +125,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                 }
             } else {
                 // For other types, we need to convert from Attribute
-                quote! { 
+                quote! {
                     #a: {
                         let attr = op.attributes.iter()
                             .find(|(k, _)| ctx.get_string(*k) == Some(#a_str))
@@ -126,7 +142,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
     let from_op_data_regions = regions.iter().enumerate().map(|(i, (r, _))| {
         quote! { #r: op.regions[#i] }
     });
-    
+
     let expanded = quote! {
         // Generate static OpInfo
         static #info_name: uvir::ops::OpInfo = uvir::ops::OpInfo {
@@ -137,10 +153,10 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
             parse: #parse_fn,
             print: #print_fn,
         };
-        
+
         // Register with inventory
         uvir::inventory::submit!(&#info_name);
-        
+
         // Verification function
         fn #verify_fn(op: &uvir::ops::OpData) -> uvir::error::Result<()> {
             // Basic verification: check operand and result counts
@@ -154,24 +170,24 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                     format!("Expected {} results, found {}", #num_results, op.results.len())
                 ));
             }
-            
+
             // Note: Type constraints and traits that require type information
             // are verified separately in the verification module with Context access
-            
+
             Ok(())
         }
-        
+
         // Parse function
         fn #parse_fn(parser: &mut uvir::parser::Parser) -> uvir::error::Result<uvir::ops::OpData> {
             // TODO: Implement parsing
             Err(uvir::error::Error::ParseError("Operation parsing not yet implemented".to_string()))
         }
-        
+
         // Print function
         fn #print_fn(op: &uvir::ops::OpData, printer: &mut uvir::printer::Printer) -> uvir::error::Result<()> {
             // Basic printing
             printer.print(&format!("{}.{}", #dialect, #op_name))?;
-            
+
             // Print results
             if !op.results.is_empty() {
                 printer.print(" ")?;
@@ -183,7 +199,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                 }
                 printer.print(" =")?;
             }
-            
+
             // Print operands
             if !op.operands.is_empty() {
                 printer.print(" ")?;
@@ -194,7 +210,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                     printer.print(&format!("%{:?}", operand))?;
                 }
             }
-            
+
             // Print attributes
             if !op.attributes.is_empty() {
                 printer.print(" {")?;
@@ -207,21 +223,21 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                 }
                 printer.print("}")?;
             }
-            
+
             Ok(())
         }
-        
+
         impl #name {
             pub fn into_op_data(mut self, ctx: &mut uvir::context::Context) -> uvir::ops::OpData {
                 // Create attributes vector with proper conversions
                 let mut attributes = uvir::smallvec::SmallVec::new();
                 #(#attr_insertions)*
-                
+
                 // Extract fields after attributes (which may need cloning)
                 let operands = uvir::smallvec::smallvec![#(#into_op_data_operands),*];
                 let results = uvir::smallvec::smallvec![#(#into_op_data_results),*];
                 let regions = uvir::smallvec::smallvec![#(#into_op_data_regions),*];
-                
+
                 uvir::ops::OpData {
                     info: &#info_name,
                     operands,
@@ -231,12 +247,12 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                     custom_data: uvir::ops::OpStorage::from_value(self),
                 }
             }
-            
+
             pub fn from_op_data(op: &uvir::ops::OpData, ctx: &uvir::Context) -> Self {
                 // Extract fields from OpData
                 let mut uses_iter = op.operands.iter();
                 let mut defs_iter = op.results.iter();
-                
+
                 Self {
                     #(#from_op_data_uses,)*
                     #(#from_op_data_defs,)*
@@ -244,23 +260,23 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
                     #(#from_op_data_regions,)*
                 }
             }
-            
+
             pub fn op_info() -> &'static uvir::ops::OpInfo {
                 &#info_name
             }
-            
+
             pub fn info() -> &'static uvir::ops::OpInfo {
                 &#info_name
             }
         }
-        
+
         impl uvir::ops::Op for #name {
             fn info(&self) -> &'static uvir::ops::OpInfo {
                 &#info_name
             }
         }
     };
-    
+
     TokenStream::from(expanded)
 }
 
@@ -268,7 +284,7 @@ fn parse_operation_attr(attr: &syn::Attribute) -> (&'static str, &'static str, V
     let mut dialect = None;
     let mut name = None;
     let mut traits = Vec::new();
-    
+
     attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("dialect") {
             let value = meta.value()?;
@@ -290,8 +306,9 @@ fn parse_operation_attr(attr: &syn::Attribute) -> (&'static str, &'static str, V
             }
         }
         Ok(())
-    }).expect("Failed to parse operation attribute");
-    
+    })
+    .expect("Failed to parse operation attribute");
+
     (
         dialect.expect("Missing dialect in operation attribute"),
         name.expect("Missing name in operation attribute"),
@@ -302,7 +319,7 @@ fn parse_operation_attr(attr: &syn::Attribute) -> (&'static str, &'static str, V
 fn parse_def_attr(attr: &syn::Attribute) -> Option<String> {
     // Parse type constraint from _def attribute like #[_def(ty = "T")]
     let mut type_constraint = None;
-    
+
     if attr.path().is_ident("_def") {
         let _ = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("ty") {
@@ -313,6 +330,6 @@ fn parse_def_attr(attr: &syn::Attribute) -> Option<String> {
             Ok(())
         });
     }
-    
+
     type_constraint
 }

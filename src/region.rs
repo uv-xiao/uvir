@@ -1,7 +1,7 @@
 use crate::ops::{OpData, Opr, Val, Value};
-use crate::types::TypeId;
 use crate::string_interner::StringId;
-use slotmap::{SlotMap, new_key_type};
+use crate::types::TypeId;
+use slotmap::{new_key_type, SlotMap};
 
 new_key_type! {
     pub struct RegionId;
@@ -54,18 +54,17 @@ impl Region {
     }
 
     pub fn iter_ops(&self) -> impl Iterator<Item = (Opr, &OpData)> {
-        self.op_order.iter().filter_map(move |&opr| {
-            self.operations.get(opr).map(|op| (opr, op))
-        })
+        self.op_order
+            .iter()
+            .filter_map(move |&opr| self.operations.get(opr).map(|op| (opr, op)))
     }
 
     pub fn get_ops_mut(&mut self) -> Vec<(Opr, &mut OpData)> {
-        self.op_order.iter()
-            .filter_map(|&opr| {
-                unsafe {
-                    let op_ptr = self.operations.get_mut(opr)? as *mut OpData;
-                    Some((opr, &mut *op_ptr))
-                }
+        self.op_order
+            .iter()
+            .filter_map(|&opr| unsafe {
+                let op_ptr = self.operations.get_mut(opr)? as *mut OpData;
+                Some((opr, &mut *op_ptr))
             })
             .collect()
     }

@@ -1,5 +1,5 @@
-use crate::ops::{Op, OpInfo, OpData, OpStorage, Val};
 use crate::attribute::Attribute;
+use crate::ops::{Op, OpData, OpInfo, OpStorage, Val};
 use smallvec::smallvec;
 
 #[derive(Clone, Debug)]
@@ -16,19 +16,17 @@ pub const CONSTANT_OP_INFO: &OpInfo = &OpInfo {
     verify: |op| {
         if op.results.len() != 1 {
             return Err(crate::error::Error::VerificationError(
-                "constant op must have exactly one result".to_string()
+                "constant op must have exactly one result".to_string(),
             ));
         }
         if op.attributes.is_empty() {
             return Err(crate::error::Error::VerificationError(
-                "constant op must have a value attribute".to_string()
+                "constant op must have a value attribute".to_string(),
             ));
         }
         Ok(())
     },
-    parse: |_parser| {
-        todo!("Implement constant op parsing")
-    },
+    parse: |_parser| todo!("Implement constant op parsing"),
     print: |_op, _printer| {
         // Use generic printing - the custom print is handled by the main printer
         // We can add custom formatting here if needed, but for now generic is fine
@@ -38,10 +36,10 @@ pub const CONSTANT_OP_INFO: &OpInfo = &OpInfo {
 
 impl ConstantOp {
     pub const INFO: &'static OpInfo = CONSTANT_OP_INFO;
-    
+
     pub fn into_op_data(self, ctx: &mut crate::Context) -> OpData {
         let value_key = ctx.intern_string("value");
-        
+
         OpData {
             info: Self::INFO,
             operands: smallvec![],
@@ -67,7 +65,6 @@ impl Op for ConstantOp {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct AddOp {
     pub result: Val,
@@ -83,19 +80,17 @@ pub const ADD_OP_INFO: &OpInfo = &OpInfo {
     verify: |op| {
         if op.results.len() != 1 {
             return Err(crate::error::Error::VerificationError(
-                "add op must have exactly one result".to_string()
+                "add op must have exactly one result".to_string(),
             ));
         }
         if op.operands.len() != 2 {
             return Err(crate::error::Error::VerificationError(
-                "add op must have exactly two operands".to_string()
+                "add op must have exactly two operands".to_string(),
             ));
         }
         Ok(())
     },
-    parse: |_parser| {
-        todo!("Implement add op parsing")
-    },
+    parse: |_parser| todo!("Implement add op parsing"),
     print: |_op, _printer| {
         // Use generic printing - the custom print is handled by the main printer
         Ok(())
@@ -104,7 +99,7 @@ pub const ADD_OP_INFO: &OpInfo = &OpInfo {
 
 impl AddOp {
     pub const INFO: &'static OpInfo = ADD_OP_INFO;
-    
+
     pub fn into_op_data(self, _ctx: &mut crate::Context) -> OpData {
         OpData {
             info: Self::INFO,
@@ -131,7 +126,6 @@ impl Op for AddOp {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct MulOp {
     pub result: Val,
@@ -147,19 +141,17 @@ pub const MUL_OP_INFO: &OpInfo = &OpInfo {
     verify: |op| {
         if op.results.len() != 1 {
             return Err(crate::error::Error::VerificationError(
-                "mul op must have exactly one result".to_string()
+                "mul op must have exactly one result".to_string(),
             ));
         }
         if op.operands.len() != 2 {
             return Err(crate::error::Error::VerificationError(
-                "mul op must have exactly two operands".to_string()
+                "mul op must have exactly two operands".to_string(),
             ));
         }
         Ok(())
     },
-    parse: |_parser| {
-        todo!("Implement mul op parsing")
-    },
+    parse: |_parser| todo!("Implement mul op parsing"),
     print: |_op, _printer| {
         // Use generic printing - the custom print is handled by the main printer
         Ok(())
@@ -168,7 +160,7 @@ pub const MUL_OP_INFO: &OpInfo = &OpInfo {
 
 impl MulOp {
     pub const INFO: &'static OpInfo = MUL_OP_INFO;
-    
+
     pub fn into_op_data(self, _ctx: &mut crate::Context) -> OpData {
         OpData {
             info: Self::INFO,
@@ -194,4 +186,3 @@ impl Op for MulOp {
         Self::INFO
     }
 }
-

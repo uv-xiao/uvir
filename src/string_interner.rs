@@ -62,14 +62,14 @@ mod tests {
     #[test]
     fn test_string_interning() {
         let mut interner = StringInterner::new();
-        
+
         let id1 = interner.intern("hello");
         let id2 = interner.intern("world");
         let id3 = interner.intern("hello");
-        
+
         assert_eq!(id1, id3);
         assert_ne!(id1, id2);
-        
+
         assert_eq!(interner.get(id1), Some("hello"));
         assert_eq!(interner.get(id2), Some("world"));
     }

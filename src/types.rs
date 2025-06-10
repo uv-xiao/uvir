@@ -1,11 +1,11 @@
-use crate::string_interner::StringId;
+use crate::error::Result;
 use crate::parser::Parser;
 use crate::printer::Printer;
-use crate::error::Result;
+use crate::string_interner::StringId;
+use ahash::AHashMap;
 use smallvec::SmallVec;
 use std::any;
 use std::fmt;
-use ahash::AHashMap;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TypeId(u32);
@@ -18,16 +18,36 @@ impl TypeId {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeKind {
-    Integer { width: u32, signed: bool },
-    Float { precision: FloatPrecision },
-    Function { inputs: Vec<TypeId>, outputs: Vec<TypeId> },
+    Integer {
+        width: u32,
+        signed: bool,
+    },
+    Float {
+        precision: FloatPrecision,
+    },
+    Function {
+        inputs: Vec<TypeId>,
+        outputs: Vec<TypeId>,
+    },
     Index,
     None,
-    Complex { element_type: TypeId },
-    Vector { shape: Vec<i64>, element_type: TypeId },
-    Tensor { shape: Vec<Option<i64>>, element_type: TypeId },
-    MemRef { shape: Vec<Option<i64>>, element_type: TypeId, memory_space: Option<u64> },
-    Dialect { 
+    Complex {
+        element_type: TypeId,
+    },
+    Vector {
+        shape: Vec<i64>,
+        element_type: TypeId,
+    },
+    Tensor {
+        shape: Vec<Option<i64>>,
+        element_type: TypeId,
+    },
+    MemRef {
+        shape: Vec<Option<i64>>,
+        element_type: TypeId,
+        memory_space: Option<u64>,
+    },
+    Dialect {
         dialect: StringId,
         data: TypeStorage,
     },
@@ -49,10 +69,7 @@ impl TypeStorage {
     pub fn new<T: DialectType>(value: T) -> Self {
         let mut data = SmallVec::new();
         let bytes = unsafe {
-            std::slice::from_raw_parts(
-                &value as *const T as *const u8,
-                std::mem::size_of::<T>(),
-            )
+            std::slice::from_raw_parts(&value as *const T as *const u8, std::mem::size_of::<T>())
         };
         data.extend_from_slice(bytes);
         std::mem::forget(value);
@@ -175,16 +192,15 @@ macro_rules! impl_dialect_type {
     ($type:ty) => {
         impl $crate::types::DialectType for $type {
             fn vtable() -> &'static $crate::types::TypeVTable {
-                use std::any::TypeId;
                 use smallvec::SmallVec;
-                
-                static VTABLE: std::sync::OnceLock<$crate::types::TypeVTable> = std::sync::OnceLock::new();
+                use std::any::TypeId;
+
+                static VTABLE: std::sync::OnceLock<$crate::types::TypeVTable> =
+                    std::sync::OnceLock::new();
                 VTABLE.get_or_init(|| $crate::types::TypeVTable {
                     type_id: TypeId::of::<$type>(),
                     name: stringify!($type),
-                    parse: |parser| {
-                        <$type>::parse(parser).map($crate::types::TypeStorage::new)
-                    },
+                    parse: |parser| <$type>::parse(parser).map($crate::types::TypeStorage::new),
                     print: |data, printer| {
                         let value = unsafe { &*(data.as_ptr() as *const $type) };
                         value.print(printer)
@@ -209,21 +225,19 @@ macro_rules! impl_dialect_type {
                         a == b
                     },
                     drop_fn: if std::mem::needs_drop::<$type>() {
-                        Some(|data| {
-                            unsafe {
-                                std::ptr::drop_in_place(data.as_mut_ptr() as *mut $type);
-                            }
+                        Some(|data| unsafe {
+                            std::ptr::drop_in_place(data.as_mut_ptr() as *mut $type);
                         })
                     } else {
                         None
                     },
                 })
             }
-            
+
             fn parse(parser: &mut $crate::parser::Parser) -> $crate::error::Result<Self> {
                 Self::parse(parser)
             }
-            
+
             fn print(&self, printer: &mut $crate::printer::Printer) -> $crate::error::Result<()> {
                 self.print(printer)
             }

@@ -1,5 +1,5 @@
-use crate::ops::Val;
 use crate::attribute::Attribute;
+use crate::ops::Val;
 // Re-export for the derive macro to use proper paths
 use crate as uvir;
 use crate::Op;
@@ -387,4 +387,3 @@ pub struct SelectOp {
     #[_def]
     pub result: Val,
 }
-
