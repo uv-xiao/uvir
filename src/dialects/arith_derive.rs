@@ -99,19 +99,18 @@ pub struct RemUIOp {
 }
 
 // Compare operation - compares two integers
-// TODO: Enable once attribute handling is improved
-// #[derive(Op, Clone, Debug)]
-// #[operation(dialect = "arith", name = "cmpi")]
-// pub struct CmpIOp {
-//     #[_use]
-//     pub lhs: Val,
-//     #[_use]
-//     pub rhs: Val,
-//     #[_def]
-//     pub result: Val,
-//     #[_attr]
-//     pub predicate: i64, // TODO: Should be an enum
-// }
+#[derive(Op, Clone, Debug)]
+#[operation(dialect = "arith", name = "cmpi")]
+pub struct CmpIOp {
+    #[_use]
+    pub lhs: Val,
+    #[_use]
+    pub rhs: Val,
+    #[_def]
+    pub result: Val,
+    #[_attr]
+    pub predicate: Attribute, // Comparison predicate (eq, ne, slt, sle, sgt, sge, ult, ule, ugt, uge)
+}
 
 // Bitwise AND operation
 #[derive(Op, Clone, Debug)]
@@ -246,19 +245,18 @@ pub struct NegFOp {
 }
 
 // Compare operation for floats
-// TODO: Enable once attribute handling is improved
-// #[derive(Op, Clone, Debug)]
-// #[operation(dialect = "arith", name = "cmpf")]
-// pub struct CmpFOp {
-//     #[_use]
-//     pub lhs: Val,
-//     #[_use]
-//     pub rhs: Val,
-//     #[_def]
-//     pub result: Val,
-//     #[_attr]
-//     pub predicate: i64, // TODO: Should be an enum
-// }
+#[derive(Op, Clone, Debug)]
+#[operation(dialect = "arith", name = "cmpf")]
+pub struct CmpFOp {
+    #[_use]
+    pub lhs: Val,
+    #[_use]
+    pub rhs: Val,
+    #[_def]
+    pub result: Val,
+    #[_attr]
+    pub predicate: Attribute, // Float comparison predicate (oeq, one, olt, ole, ogt, oge, ord, ueq, une, ult, ule, ugt, uge, uno)
+}
 
 // Cast operations
 
@@ -358,6 +356,34 @@ pub struct FPToUIOp {
 pub struct BitcastOp {
     #[_use]
     pub operand: Val,
+    #[_def]
+    pub result: Val,
+}
+
+// Add operation with overflow flags
+#[derive(Op, Clone, Debug)]
+#[operation(dialect = "arith", name = "addui_extended")]
+pub struct AddUIExtendedOp {
+    #[_use]
+    pub lhs: Val,
+    #[_use]
+    pub rhs: Val,
+    #[_def]
+    pub sum: Val,
+    #[_def]
+    pub overflow: Val, // Boolean indicating if overflow occurred
+}
+
+// Select operation
+#[derive(Op, Clone, Debug)]
+#[operation(dialect = "arith", name = "select")]
+pub struct SelectOp {
+    #[_use]
+    pub condition: Val,
+    #[_use]
+    pub true_value: Val,
+    #[_use]
+    pub false_value: Val,
     #[_def]
     pub result: Val,
 }

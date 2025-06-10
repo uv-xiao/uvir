@@ -2,15 +2,6 @@
 
 A Rust library for creating new intermediate representations (IR) for DSLs, inspired by MLIR's design principles. 
 
-## TODO
-
-1. Derive-based operation definition
-   - [x] Add tests for it.
-   - [x] Fix the implementation to pass the test.
-   - [x] Use it for all dialects: arith, builtin, scf, affine, func
-2. Operation check is not tested.
-3. Finish the pass system and test it. 
-4. Add a test for the pass system.
 
 ## Progress
 
@@ -28,7 +19,14 @@ A Rust library for creating new intermediate representations (IR) for DSLs, insp
   - **affine**: Affine operations (affine.for, affine.if, affine.apply, affine.load/store, min/max)
   - **func**: Function operations (func, return, call, call_indirect, constant)
 - [x] Testing: Comprehensive tests for all dialects and derive macro functionality
-- [ ] Parse/print: Basic parse/print functionality with MLIR compatible grammar.
+- [x] Parse/print: Basic parse/print functionality with MLIR compatible grammar.
+- [x] Derive-based operation definition
+   - [x] Add tests for it.
+   - [x] Fix the implementation to pass the test.
+   - [x] Use it for all dialects: arith, builtin, scf, affine, func
+- [ ] Operation check is not tested.
+- [ ] Finish the pass system and test it. 
+- [ ] Add a test for the pass system.
 
 ## Core Infrastructure
 
