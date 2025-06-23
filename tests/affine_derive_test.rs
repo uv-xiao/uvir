@@ -28,7 +28,8 @@ fn test_affine_for() {
         upper_bound_map: upper_map,
     };
 
-    let op_data = for_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = for_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "affine");
     assert_eq!(op_data.info.name, "for");
@@ -61,7 +62,8 @@ fn test_affine_parallel() {
         reductions,
     };
 
-    let op_data = parallel_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = parallel_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "affine");
     assert_eq!(op_data.info.name, "parallel");
@@ -92,7 +94,8 @@ fn test_affine_if() {
         condition_set,
     };
 
-    let op_data = if_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = if_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "affine");
     assert_eq!(op_data.info.name, "if");
@@ -118,7 +121,8 @@ fn test_affine_apply() {
         map,
     };
 
-    let op_data = apply_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = apply_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "affine");
     assert_eq!(op_data.info.name, "apply");
@@ -150,7 +154,8 @@ fn test_affine_load_store() {
         map: map.clone(),
     };
 
-    let load_data = load_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let load_data = load_op.into_op_data(&mut ctx, global_region);
     assert_eq!(load_data.info.dialect, "affine");
     assert_eq!(load_data.info.name, "load");
 
@@ -162,7 +167,7 @@ fn test_affine_load_store() {
         map,
     };
 
-    let store_data = store_op.into_op_data(&mut ctx);
+    let store_data = store_op.into_op_data(&mut ctx, global_region);
     assert_eq!(store_data.info.dialect, "affine");
     assert_eq!(store_data.info.name, "store");
     assert_eq!(store_data.operands.len(), 3);
@@ -188,7 +193,8 @@ fn test_affine_min_max() {
         map: map.clone(),
     };
 
-    let min_data = min_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let min_data = min_op.into_op_data(&mut ctx, global_region);
     assert_eq!(min_data.info.dialect, "affine");
     assert_eq!(min_data.info.name, "min");
 
@@ -199,7 +205,7 @@ fn test_affine_min_max() {
         map,
     };
 
-    let max_data = max_op.into_op_data(&mut ctx);
+    let max_data = max_op.into_op_data(&mut ctx, global_region);
     assert_eq!(max_data.info.dialect, "affine");
     assert_eq!(max_data.info.name, "max");
 }
@@ -214,7 +220,8 @@ fn test_affine_yield() {
 
     let yield_op = AffineYieldOp { operands: value };
 
-    let op_data = yield_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = yield_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "affine");
     assert_eq!(op_data.info.name, "yield");
@@ -239,7 +246,8 @@ fn test_roundtrip_affine_apply() {
     };
 
     let apply_clone = apply_op.clone();
-    let op_data = apply_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = apply_op.into_op_data(&mut ctx, global_region);
 
     // Convert back
     let recovered = AffineApplyOp::from_op_data(&op_data, &ctx);

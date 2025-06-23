@@ -56,7 +56,8 @@ mod tests {
             rhs: b,
             result,
         };
-        let op_data = add_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = add_op.into_op_data(&mut ctx, global_region);
 
         // Should pass verification
         assert!(verify_operation(&op_data, &ctx).is_ok());
@@ -73,7 +74,7 @@ mod tests {
             rhs: c,
             result,
         };
-        let bad_op_data = bad_add_op.into_op_data(&mut ctx);
+        let bad_op_data = bad_add_op.into_op_data(&mut ctx, global_region);
 
         // Should fail verification
         let result = verify_operation(&bad_op_data, &ctx);
@@ -101,7 +102,8 @@ mod tests {
             rhs: b,
             result,
         };
-        let op_data = add_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = add_op.into_op_data(&mut ctx, global_region);
 
         // Should pass basic verification
         assert!((op_data.info.verify)(&op_data).is_ok());
@@ -125,7 +127,8 @@ mod tests {
             output1: out1,
             output2: out2,
         };
-        let op_data = split_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = split_op.into_op_data(&mut ctx, global_region);
 
         // Should pass verification - all same type
         assert!(verify_operation(&op_data, &ctx).is_ok());
@@ -139,7 +142,7 @@ mod tests {
             output1: out1,
             output2: bad_out2,
         };
-        let bad_data = bad_split.into_op_data(&mut ctx);
+        let bad_data = bad_split.into_op_data(&mut ctx, global_region);
 
         // Should fail - different types
         assert!(verify_operation(&bad_data, &ctx).is_err());
@@ -160,7 +163,8 @@ mod tests {
             rhs: b,
             result,
         };
-        let op_data = mul_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = mul_op.into_op_data(&mut ctx, global_region);
 
         // Should have Commutative trait
         assert!(op_data.info.traits.contains(&"Commutative"));
@@ -185,7 +189,8 @@ mod tests {
             rhs: good_val,
             result: good_val,
         };
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Should fail verification - can't find type for fake_val
         let result = verify_operation(&op_data, &ctx);

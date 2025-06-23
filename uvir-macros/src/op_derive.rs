@@ -105,7 +105,7 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
     });
 
     let from_op_data_uses = uses.iter().enumerate().map(|(i, (u, _))| {
-        quote! { #u: op.operands[#i] }
+        quote! { #u: op.operands[#i].val }
     });
     let from_op_data_defs = defs.iter().enumerate().map(|(i, (d, _, _))| {
         quote! { #d: op.results[#i] }
@@ -228,13 +228,13 @@ pub fn derive_op(input: TokenStream) -> TokenStream {
         }
 
         impl #name {
-            pub fn into_op_data(mut self, ctx: &mut uvir::context::Context) -> uvir::ops::OpData {
+            pub fn into_op_data(mut self, ctx: &mut uvir::context::Context, region: uvir::region::RegionId) -> uvir::ops::OpData {
                 // Create attributes vector with proper conversions
                 let mut attributes = uvir::smallvec::SmallVec::new();
                 #(#attr_insertions)*
 
                 // Extract fields after attributes (which may need cloning)
-                let operands = uvir::smallvec::smallvec![#(#into_op_data_operands),*];
+                let operands = uvir::smallvec::smallvec![#(ctx.make_value_ref(region, #into_op_data_operands)),*];
                 let results = uvir::smallvec::smallvec![#(#into_op_data_results),*];
                 let regions = uvir::smallvec::smallvec![#(#into_op_data_regions),*];
 

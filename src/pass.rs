@@ -14,11 +14,11 @@ pub trait RewritePattern: 'static {
     fn match_and_rewrite(&self, op: Opr, rewriter: &mut PatternRewriter) -> Result<bool>;
 }
 
-// Rewriter with operation tracking
+// Rewriter with operation tracking across multiple regions
 pub struct PatternRewriter<'a> {
     pub ctx: &'a mut Context,
-    worklist: VecDeque<Opr>,
-    erased: AHashSet<Opr>,
+    worklist: VecDeque<(RegionId, Opr)>,
+    erased: AHashSet<(RegionId, Opr)>,
     current_region: RegionId,
 }
 
@@ -29,7 +29,7 @@ impl<'a> PatternRewriter<'a> {
         // Add all operations in the region to the worklist
         if let Some(region_ref) = ctx.get_region(region) {
             for (opr, _) in region_ref.iter_ops() {
-                worklist.push_back(opr);
+                worklist.push_back((region, opr));
             }
         }
 
@@ -41,66 +41,183 @@ impl<'a> PatternRewriter<'a> {
         }
     }
 
-    // Replace an operation with new operations
+    // Get the current region being processed
+    pub fn current_region(&self) -> RegionId {
+        self.current_region
+    }
+    
+    // Replace an operation with new operations in the current region
     pub fn replace_op(&mut self, op: Opr, new_ops: &[Opr]) {
-        self.erased.insert(op);
+        self.erased.insert((self.current_region, op));
 
         // Add new operations to worklist
         for &new_op in new_ops {
-            self.worklist.push_back(new_op);
+            self.worklist.push_back((self.current_region, new_op));
+        }
+    }
+    
+    // Replace an operation with new operations in a specific region
+    pub fn replace_op_in_region(&mut self, region: RegionId, op: Opr, new_ops: &[Opr]) {
+        self.erased.insert((region, op));
+
+        // Add new operations to worklist
+        for &new_op in new_ops {
+            self.worklist.push_back((region, new_op));
         }
     }
 
-    // Erase an operation
+    // Erase an operation from the current region
     pub fn erase_op(&mut self, op: Opr) {
-        self.erased.insert(op);
+        self.erased.insert((self.current_region, op));
 
         if let Some(region) = self.ctx.get_region_mut(self.current_region) {
             region.remove_op(op);
         }
     }
+    
+    // Erase an operation from a specific region
+    pub fn erase_op_in_region(&mut self, region_id: RegionId, op: Opr) {
+        self.erased.insert((region_id, op));
 
-    // Replace all uses of a value with another value
+        if let Some(region) = self.ctx.get_region_mut(region_id) {
+            region.remove_op(op);
+        }
+    }
+
+    // Replace all uses of a value with another value in the current region
     pub fn replace_all_uses(&mut self, from: Val, to: Val) {
-        if let Some(region) = self.ctx.get_region_mut(self.current_region) {
+        self.replace_all_uses_in_region(self.current_region, from, to);
+    }
+    
+    // Replace all uses of a value with another value in a specific region
+    pub fn replace_all_uses_in_region(&mut self, region_id: RegionId, from: Val, to: Val) {
+        if let Some(region) = self.ctx.get_region_mut(region_id) {
             // Update all operations that use 'from' to use 'to' instead
             let ops_to_update: Vec<Opr> = region.op_order.clone();
 
             for opr in ops_to_update {
                 if let Some(op) = region.get_op_mut(opr) {
                     for operand in &mut op.operands {
-                        if *operand == from {
-                            *operand = to;
+                        // Check if this operand references the value we're replacing
+                        if operand.val == from && operand.region == region_id {
+                            // Update to the new value in the same region
+                            operand.val = to;
                         }
                     }
                 }
             }
         }
+        
+        // Also check nested regions
+        self.replace_all_uses_in_nested_regions(region_id, from, to);
+    }
+    
+    // Helper to replace uses in nested regions
+    fn replace_all_uses_in_nested_regions(&mut self, parent_region: RegionId, from: Val, to: Val) {
+        // Collect nested regions to avoid borrow checker issues
+        let nested_regions: Vec<RegionId> = if let Some(region) = self.ctx.get_region(parent_region) {
+            region.iter_ops()
+                .flat_map(|(_, op)| op.regions.iter().copied())
+                .collect()
+        } else {
+            vec![]
+        };
+        
+        // Process nested regions
+        for nested_region in nested_regions {
+            self.replace_all_uses_in_region(nested_region, from, to);
+        }
     }
 
     // Get the next operation from the worklist
-    pub fn next_op(&mut self) -> Option<Opr> {
-        while let Some(op) = self.worklist.pop_front() {
-            if !self.erased.contains(&op) {
-                return Some(op);
+    pub fn next_op(&mut self) -> Option<(RegionId, Opr)> {
+        while let Some((region, op)) = self.worklist.pop_front() {
+            if !self.erased.contains(&(region, op)) {
+                self.current_region = region;
+                return Some((region, op));
             }
         }
         None
     }
 
-    // Create a new operation and add it to the region
+    // Create a new operation and add it to the current region
     pub fn create_op(&mut self, op_data: OpData) -> Opr {
-        if let Some(region) = self.ctx.get_region_mut(self.current_region) {
+        self.create_op_in_region(self.current_region, op_data)
+    }
+    
+    // Create a new operation and add it to a specific region
+    pub fn create_op_in_region(&mut self, region_id: RegionId, op_data: OpData) -> Opr {
+        if let Some(region) = self.ctx.get_region_mut(region_id) {
             let opr = region.add_operation(op_data);
-            self.worklist.push_back(opr);
+            self.worklist.push_back((region_id, opr));
             opr
         } else {
             panic!("Invalid region");
         }
     }
+    
+    // Add regions from an operation to the worklist for processing
+    pub fn process_nested_regions(&mut self, op: &OpData) {
+        for &region_id in &op.regions {
+            if let Some(region) = self.ctx.get_region(region_id) {
+                for (opr, _) in region.iter_ops() {
+                    self.worklist.push_back((region_id, opr));
+                }
+            }
+        }
+    }
+    
+    // Get operation from a specific region
+    pub fn get_op(&self, region_id: RegionId, op: Opr) -> Option<&OpData> {
+        self.ctx.get_region(region_id)?.get_op(op)
+    }
+    
+    // Get mutable operation from a specific region
+    pub fn get_op_mut(&mut self, region_id: RegionId, op: Opr) -> Option<&mut OpData> {
+        self.ctx.get_region_mut(region_id)?.get_op_mut(op)
+    }
 }
 
-// Greedy pattern driver
+// Multi-region pattern driver that processes all regions recursively
+pub fn apply_patterns_greedy_all_regions(
+    ctx: &mut Context,
+    patterns: &[Box<dyn RewritePattern>],
+    start_region: RegionId,
+) -> Result<bool> {
+    let mut changed = false;
+    let mut regions_to_process = vec![start_region];
+    let mut processed_regions = AHashSet::new();
+    
+    // Collect all regions to process
+    while let Some(region_id) = regions_to_process.pop() {
+        if processed_regions.contains(&region_id) {
+            continue;
+        }
+        processed_regions.insert(region_id);
+        
+        // Find nested regions
+        if let Some(region) = ctx.get_region(region_id) {
+            for (_, op) in region.iter_ops() {
+                for &nested_region in &op.regions {
+                    if !processed_regions.contains(&nested_region) {
+                        regions_to_process.push(nested_region);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Apply patterns to each region
+    for &region_id in &processed_regions {
+        if apply_patterns_greedy(ctx, patterns, region_id)? {
+            changed = true;
+        }
+    }
+    
+    Ok(changed)
+}
+
+// Greedy pattern driver for a single region
 pub fn apply_patterns_greedy(
     ctx: &mut Context,
     patterns: &[Box<dyn RewritePattern>],
@@ -117,9 +234,9 @@ pub fn apply_patterns_greedy(
         let mut local_changed = false;
         let mut rewriter = PatternRewriter::new(ctx, region);
 
-        while let Some(op) = rewriter.next_op() {
+        while let Some((region, op)) = rewriter.next_op() {
             // Skip if operation was erased
-            if rewriter.erased.contains(&op) {
+            if rewriter.erased.contains(&(region, op)) {
                 continue;
             }
 
@@ -224,37 +341,6 @@ impl Default for PassManager {
     }
 }
 
-// Example pattern: constant folding for add
-pub struct ConstantFoldAddPattern;
-
-impl RewritePattern for ConstantFoldAddPattern {
-    fn benefit(&self) -> usize {
-        10 // High priority
-    }
-
-    fn match_and_rewrite(&self, op: Opr, rewriter: &mut PatternRewriter) -> Result<bool> {
-        // Get the operation
-        let region = rewriter
-            .ctx
-            .get_region(rewriter.current_region)
-            .ok_or_else(|| crate::error::Error::InvalidRegion("Region not found".to_string()))?;
-
-        let op_data = region.get_op(op).ok_or_else(|| {
-            crate::error::Error::InvalidOperation("Operation not found".to_string())
-        })?;
-
-        // Check if it's an add operation
-        if op_data.info.dialect != "arith" || op_data.info.name != "addi" {
-            return Ok(false);
-        }
-
-        // Check if both operands are constants
-        // TODO: Implement constant checking logic
-
-        Ok(false)
-    }
-}
-
 // Example pass: dead code elimination
 pub struct DeadCodeEliminationPass;
 
@@ -274,8 +360,9 @@ impl Pass for DeadCodeEliminationPass {
             let mut value_uses: HashMap<Val, Vec<Opr>> = HashMap::new();
 
             for (opr, op) in region.iter_ops() {
-                for &operand in &op.operands {
-                    value_uses.entry(operand).or_insert_with(Vec::new).push(opr);
+                for operand_ref in &op.operands {
+                    // Extract the Val from ValueRef for use tracking
+                    value_uses.entry(operand_ref.val).or_insert_with(Vec::new).push(opr);
                 }
             }
 

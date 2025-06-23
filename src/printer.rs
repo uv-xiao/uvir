@@ -10,6 +10,7 @@ pub struct Printer {
     output: String,
     indent_level: usize,
     indent_str: String,
+    current_region: Option<RegionId>,
 }
 
 impl Printer {
@@ -18,6 +19,7 @@ impl Printer {
             output: String::new(),
             indent_level: 0,
             indent_str: "  ".to_string(),
+            current_region: None,
         }
     }
 
@@ -59,31 +61,52 @@ impl Printer {
 
     // Print a value reference like %0, %arg0
     pub fn print_value(&mut self, ctx: &Context, val: Val) -> Result<()> {
-        if let Some(region) = ctx.get_region(ctx.global_region()) {
-            if let Some(value) = region.get_value(val) {
-                if let Some(name) = value.name {
-                    if let Some(name_str) = ctx.get_string(name) {
-                        write!(&mut self.output, "%{}", name_str).map_err(|_| {
-                            crate::error::Error::InternalError("Write error".to_string())
-                        })
-                    } else {
-                        Err(crate::error::Error::InternalError(
-                            "Unknown StringId".to_string(),
-                        ))
-                    }
+        // Use value scoping to find the value
+        let current_region = self.current_region.unwrap_or(ctx.global_region());
+        if let Some(value) = ctx.find_value(current_region, val) {
+            if let Some(name) = value.name {
+                if let Some(name_str) = ctx.get_string(name) {
+                    write!(&mut self.output, "%{}", name_str).map_err(|_| {
+                        crate::error::Error::InternalError("Write error".to_string())
+                    })
                 } else {
-                    // Use a numeric name based on the slot map key
-                    write!(&mut self.output, "%{}", val)
-                        .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+                    Err(crate::error::Error::InternalError(
+                        "Unknown StringId".to_string(),
+                    ))
                 }
             } else {
-                Err(crate::error::Error::InternalError(
-                    "Unknown Val in region".to_string(),
-                ))
+                // Use a numeric name based on the slot map key
+                write!(&mut self.output, "%{}", val)
+                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
             }
         } else {
             Err(crate::error::Error::InternalError(
-                "Unknown region".to_string(),
+                "Unknown Val in region".to_string(),
+            ))
+        }
+    }
+    
+    // Print a cross-region value reference
+    pub fn print_value_ref(&mut self, ctx: &Context, value_ref: crate::ops::ValueRef) -> Result<()> {
+        if let Some(value) = ctx.resolve_value_ref(value_ref) {
+            if let Some(name) = value.name {
+                if let Some(name_str) = ctx.get_string(name) {
+                    write!(&mut self.output, "%{}", name_str).map_err(|_| {
+                        crate::error::Error::InternalError("Write error".to_string())
+                    })
+                } else {
+                    Err(crate::error::Error::InternalError(
+                        "Unknown StringId".to_string(),
+                    ))
+                }
+            } else {
+                // Use a numeric name based on the slot map key
+                write!(&mut self.output, "%{}", value_ref.val)
+                    .map_err(|_| crate::error::Error::InternalError("Write error".to_string()))
+            }
+        } else {
+            Err(crate::error::Error::InternalError(
+                "Unknown ValueRef".to_string(),
             ))
         }
     }
@@ -302,7 +325,7 @@ impl Printer {
                 if i > 0 {
                     self.print(", ")?;
                 }
-                self.print_value(ctx, operand)?;
+                self.print_value_ref(ctx, operand)?;
             }
 
             if use_generic_form {
@@ -366,10 +389,8 @@ impl Printer {
         if op.operands.is_empty() {
             self.print("()")?;
         } else if op.operands.len() == 1 {
-            if let Some(region) = ctx.get_region(ctx.global_region()) {
-                if let Some(value) = region.get_value(op.operands[0]) {
-                    self.print_type(ctx, value.ty)?;
-                }
+            if let Some(value) = ctx.resolve_value_ref(op.operands[0]) {
+                self.print_type(ctx, value.ty)?;
             }
         } else {
             self.print("(")?;
@@ -377,10 +398,8 @@ impl Printer {
                 if i > 0 {
                     self.print(", ")?;
                 }
-                if let Some(region) = ctx.get_region(ctx.global_region()) {
-                    if let Some(value) = region.get_value(operand) {
-                        self.print_type(ctx, value.ty)?;
-                    }
+                if let Some(value) = ctx.resolve_value_ref(operand) {
+                    self.print_type(ctx, value.ty)?;
                 }
             }
             self.print(")")?;
@@ -392,10 +411,9 @@ impl Printer {
         if op.results.is_empty() {
             self.print("()")?;
         } else if op.results.len() == 1 {
-            if let Some(region) = ctx.get_region(ctx.global_region()) {
-                if let Some(value) = region.get_value(op.results[0]) {
-                    self.print_type(ctx, value.ty)?;
-                }
+            let current_region = self.current_region.unwrap_or(ctx.global_region());
+            if let Some(value) = ctx.find_value(current_region, op.results[0]) {
+                self.print_type(ctx, value.ty)?;
             }
         } else {
             self.print("(")?;
@@ -403,10 +421,9 @@ impl Printer {
                 if i > 0 {
                     self.print(", ")?;
                 }
-                if let Some(region) = ctx.get_region(ctx.global_region()) {
-                    if let Some(value) = region.get_value(result) {
-                        self.print_type(ctx, value.ty)?;
-                    }
+                let current_region = self.current_region.unwrap_or(ctx.global_region());
+                if let Some(value) = ctx.find_value(current_region, result) {
+                    self.print_type(ctx, value.ty)?;
                 }
             }
             self.print(")")?;
@@ -419,8 +436,34 @@ impl Printer {
     pub fn print_region(&mut self, ctx: &Context, region_id: RegionId) -> Result<()> {
         self.println("{")?;
         self.indent();
+        
+        let saved_region = self.current_region;
+        self.current_region = Some(region_id);
 
         if let Some(region) = ctx.get_region(region_id) {
+            // Print region arguments if any
+            if !region.arguments.is_empty() {
+                self.print_indent()?;
+                self.print("^bb0(")?;
+                
+                for (i, &arg) in region.arguments.iter().enumerate() {
+                    if i > 0 {
+                        self.print(", ")?;
+                    }
+                    
+                    // Print argument
+                    self.print_value(ctx, arg)?;
+                    self.print(": ")?;
+                    
+                    // Print argument type
+                    if let Some(value) = region.get_value(arg) {
+                        self.print_type(ctx, value.ty)?;
+                    }
+                }
+                
+                self.println("):")?;
+            }
+            
             for (_opr, op) in region.iter_ops() {
                 self.print_indent()?;
                 self.print_operation(ctx, op)?;
@@ -430,6 +473,7 @@ impl Printer {
 
         self.dedent();
         self.print_indent()?;
+        self.current_region = saved_region;
         self.print("}")
     }
 

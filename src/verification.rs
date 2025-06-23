@@ -32,7 +32,7 @@ fn verify_same_type(op: &OpData, ctx: &Context) -> Result<()> {
 
     // Collect operand types
     for operand in &op.operands {
-        if let Some(ty) = get_value_type(*operand, ctx) {
+        if let Some(ty) = get_value_type_from_ref(*operand, ctx) {
             all_types.push(ty);
         } else {
             return Err(Error::VerificationError(format!(
@@ -80,6 +80,17 @@ fn get_value_type(val: Val, ctx: &Context) -> Option<TypeId> {
     None
 }
 
+/// Get the type of a value from a ValueRef
+fn get_value_type_from_ref(value_ref: crate::ops::ValueRef, ctx: &Context) -> Option<TypeId> {
+    // Use the region information from ValueRef to look up the value
+    if let Some(region) = ctx.get_region(value_ref.region) {
+        if let Some(value) = region.get_value(value_ref.val) {
+            return Some(value.ty);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,9 +121,13 @@ mod tests {
             print: |_, _| Ok(()),
         };
 
+        let global_region = ctx.global_region();
         let op_data = OpData {
             info: &TEST_INFO,
-            operands: smallvec![a, b],
+            operands: smallvec![
+                crate::ops::ValueRef { region: global_region, val: a },
+                crate::ops::ValueRef { region: global_region, val: b }
+            ],
             results: smallvec![result],
             attributes: AttributeMap::new(),
             regions: smallvec![],
@@ -128,7 +143,10 @@ mod tests {
 
         let bad_op_data = OpData {
             info: &TEST_INFO,
-            operands: smallvec![a, c], // Different types!
+            operands: smallvec![
+                crate::ops::ValueRef { region: global_region, val: a },
+                crate::ops::ValueRef { region: global_region, val: c }
+            ], // Different types!
             results: smallvec![result],
             attributes: AttributeMap::new(),
             regions: smallvec![],

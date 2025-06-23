@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::ops::{OpData, OpRegistry, Val};
+use crate::ops::{OpData, OpRegistry, Val, ValueRef};
 use crate::region::{RegionId, RegionManager};
 use crate::string_interner::{StringId, StringInterner};
 use crate::types::{FloatPrecision, TypeId, TypeInterner, TypeKind};
@@ -108,6 +108,54 @@ impl Context {
                 region_id
             )))
         }
+    }
+    
+    // Create a nested region with parent
+    pub fn create_region_with_parent(&mut self, parent: RegionId) -> RegionId {
+        self.regions.create_region_with_parent(parent)
+    }
+    
+    // Find a value following MLIR scoping rules
+    pub fn find_value(&self, from_region: RegionId, val: Val) -> Option<&crate::ops::Value> {
+        // First check the current region
+        if let Some(region) = self.get_region(from_region) {
+            if let Some(value) = region.get_value(val) {
+                return Some(value);
+            }
+            
+            // Check if this value is a region argument
+            if region.arguments.contains(&val) {
+                // Look for the value in parent regions
+                let mut current_parent = region.parent;
+                while let Some(parent_id) = current_parent {
+                    if let Some(parent_region) = self.get_region(parent_id) {
+                        if let Some(value) = parent_region.get_value(val) {
+                            return Some(value);
+                        }
+                        current_parent = parent_region.parent;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        None
+    }
+    
+    // Check if a value is accessible from a region (MLIR scoping)
+    pub fn is_value_accessible(&self, from_region: RegionId, val: Val) -> bool {
+        self.find_value(from_region, val).is_some()
+    }
+    
+    // Resolve a ValueRef to get the actual Value
+    pub fn resolve_value_ref(&self, value_ref: ValueRef) -> Option<&crate::ops::Value> {
+        self.get_region(value_ref.region)
+            .and_then(|region| region.get_value(value_ref.val))
+    }
+    
+    // Create a ValueRef for a value in the current region
+    pub fn make_value_ref(&self, region: RegionId, val: Val) -> ValueRef {
+        ValueRef { region, val }
     }
 
     // Get builtin types helper

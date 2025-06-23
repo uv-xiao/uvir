@@ -21,7 +21,8 @@ fn test_arith_ops_basic() {
         rhs: b,
         result,
     };
-    let op_data = add_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = add_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "arith");
     assert_eq!(op_data.info.name, "addi");
@@ -35,7 +36,8 @@ fn test_arith_ops_basic() {
         rhs: b,
         result,
     };
-    let mul_data = mul_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let mul_data = mul_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(mul_data.info.dialect, "arith");
     assert_eq!(mul_data.info.name, "muli");
@@ -47,7 +49,8 @@ fn test_arith_ops_basic() {
         rhs: b,
         result,
     };
-    let sub_data = sub_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let sub_data = sub_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(sub_data.info.dialect, "arith");
     assert_eq!(sub_data.info.name, "subi");
@@ -70,7 +73,8 @@ fn test_print_arith_ops() {
         rhs: b,
         result,
     };
-    let op_data = add_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = add_op.into_op_data(&mut ctx, global_region);
 
     let mut printer = uvir::printer::Printer::new();
     printer.print_operation(&ctx, &op_data).unwrap();
@@ -100,7 +104,8 @@ fn test_roundtrip_conversion() {
         result,
     };
     let add_clone = add_op.clone();
-    let op_data = add_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = add_op.into_op_data(&mut ctx, global_region);
 
     // Convert back
     let recovered = AddOp::from_op_data(&op_data, &ctx);
@@ -130,7 +135,8 @@ fn test_comparison_operations() {
         result,
         predicate,
     };
-    let op_data = cmpi_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = cmpi_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "arith");
     assert_eq!(op_data.info.name, "cmpi");
@@ -149,7 +155,8 @@ fn test_comparison_operations() {
         result: fresult,
         predicate: fpredicate,
     };
-    let op_data = cmpf_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = cmpf_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.name, "cmpf");
     assert_eq!(op_data.attributes.len(), 1);
@@ -173,7 +180,8 @@ fn test_select_operation() {
         false_value: false_val,
         result,
     };
-    let op_data = select_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = select_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "arith");
     assert_eq!(op_data.info.name, "select");
@@ -199,7 +207,8 @@ fn test_overflow_operation() {
         sum,
         overflow,
     };
-    let op_data = add_overflow_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = add_overflow_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "arith");
     assert_eq!(op_data.info.name, "addui_extended");
@@ -224,7 +233,8 @@ fn test_same_type_verification() {
         rhs: b,
         result,
     };
-    let op_data = add_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = add_op.into_op_data(&mut ctx, global_region);
 
     // Should pass verification
     assert!(verify_operation(&op_data, &ctx).is_ok());
@@ -238,7 +248,8 @@ fn test_same_type_verification() {
         rhs: c,
         result,
     };
-    let bad_data = bad_add.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let bad_data = bad_add.into_op_data(&mut ctx, global_region);
 
     // Should fail verification
     let verify_result = verify_operation(&bad_data, &ctx);
@@ -254,7 +265,8 @@ fn test_same_type_verification() {
         rhs: b,
         result: result_64,
     };
-    let bad_mul_data = bad_mul.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let bad_mul_data = bad_mul.into_op_data(&mut ctx, global_region);
 
     let verify_result = verify_operation(&bad_mul_data, &ctx);
     assert!(verify_result.is_err());

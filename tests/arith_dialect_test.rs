@@ -41,7 +41,8 @@ fn test_constant_integer_operations() {
         value: Attribute::Integer(42),
     };
 
-    let op_data = const_i32.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_i32.into_op_data(&mut ctx, global_region);
     assert_eq!(op_data.info.dialect, "arith");
     assert_eq!(op_data.info.name, "constant");
     assert_eq!(op_data.results.len(), 1);
@@ -62,7 +63,7 @@ fn test_constant_integer_operations() {
         value: Attribute::Integer(i64::MAX),
     };
 
-    let op_data_i64 = const_i64.into_op_data(&mut ctx);
+    let op_data_i64 = const_i64.into_op_data(&mut ctx, global_region);
 
     {
         let region = ctx.get_global_region_mut();
@@ -103,7 +104,8 @@ fn test_constant_float_operations() {
         value: Attribute::Float(3.14),
     };
 
-    let op_data_f32 = const_f32.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data_f32 = const_f32.into_op_data(&mut ctx, global_region);
 
     // Test f64 constant
     let val_f64 = {
@@ -120,7 +122,7 @@ fn test_constant_float_operations() {
         value: Attribute::Float(std::f64::consts::PI),
     };
 
-    let op_data_f64 = const_f64.into_op_data(&mut ctx);
+    let op_data_f64 = const_f64.into_op_data(&mut ctx, global_region);
 
     {
         let region = ctx.get_global_region_mut();
@@ -173,14 +175,15 @@ fn test_add_operation() {
         rhs: b,
     };
 
-    let add_data = add.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let add_data = add.into_op_data(&mut ctx, global_region);
 
     // Verify operation properties
     assert_eq!(add_data.info.dialect, "arith");
     assert_eq!(add_data.info.name, "addi");
     assert_eq!(add_data.operands.len(), 2);
-    assert_eq!(add_data.operands[0], a);
-    assert_eq!(add_data.operands[1], b);
+    assert_eq!(add_data.operands[0].val, a);
+    assert_eq!(add_data.operands[1].val, b);
     assert_eq!(add_data.results.len(), 1);
     assert_eq!(add_data.results[0], sum);
 
@@ -232,7 +235,8 @@ fn test_multiply_operation() {
         rhs: y,
     };
 
-    let mul_data = mul.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let mul_data = mul.into_op_data(&mut ctx, global_region);
 
     // Verify operation properties
     assert_eq!(mul_data.info.dialect, "arith");
@@ -326,12 +330,13 @@ fn test_arithmetic_expression() {
     };
 
     // Convert to OpData and add to region
+    let global_region = ctx.global_region();
     let ops = vec![
-        const1.into_op_data(&mut ctx),
-        const2.into_op_data(&mut ctx),
-        const3.into_op_data(&mut ctx),
-        add.into_op_data(&mut ctx),
-        mul.into_op_data(&mut ctx),
+        const1.into_op_data(&mut ctx, global_region),
+        const2.into_op_data(&mut ctx, global_region),
+        const3.into_op_data(&mut ctx, global_region),
+        add.into_op_data(&mut ctx, global_region),
+        mul.into_op_data(&mut ctx, global_region),
     ];
 
     {
@@ -415,11 +420,12 @@ fn test_mixed_type_constants() {
     };
 
     // Add all operations
+    let global_region = ctx.global_region();
     let ops = vec![
-        int_const.into_op_data(&mut ctx),
-        uint_const.into_op_data(&mut ctx),
-        float_const.into_op_data(&mut ctx),
-        str_const.into_op_data(&mut ctx),
+        int_const.into_op_data(&mut ctx, global_region),
+        uint_const.into_op_data(&mut ctx, global_region),
+        float_const.into_op_data(&mut ctx, global_region),
+        str_const.into_op_data(&mut ctx, global_region),
     ];
 
     {
@@ -498,45 +504,46 @@ fn test_chained_additions() {
     let (a, b, c, d, sum1, sum2, final_sum) = values;
 
     // Create constants
+    let global_region = ctx.global_region();
     let ops = vec![
         ConstantOp {
             result: a,
             value: Attribute::Integer(1),
         }
-        .into_op_data(&mut ctx),
+        .into_op_data(&mut ctx, global_region),
         ConstantOp {
             result: b,
             value: Attribute::Integer(2),
         }
-        .into_op_data(&mut ctx),
+        .into_op_data(&mut ctx, global_region),
         ConstantOp {
             result: c,
             value: Attribute::Integer(3),
         }
-        .into_op_data(&mut ctx),
+        .into_op_data(&mut ctx, global_region),
         ConstantOp {
             result: d,
             value: Attribute::Integer(4),
         }
-        .into_op_data(&mut ctx),
+        .into_op_data(&mut ctx, global_region),
         AddOp {
             result: sum1,
             lhs: a,
             rhs: b,
         }
-        .into_op_data(&mut ctx), // 1 + 2 = 3
+        .into_op_data(&mut ctx, global_region), // 1 + 2 = 3
         AddOp {
             result: sum2,
             lhs: sum1,
             rhs: c,
         }
-        .into_op_data(&mut ctx), // 3 + 3 = 6
+        .into_op_data(&mut ctx, global_region), // 3 + 3 = 6
         AddOp {
             result: final_sum,
             lhs: sum2,
             rhs: d,
         }
-        .into_op_data(&mut ctx), // 6 + 4 = 10
+        .into_op_data(&mut ctx, global_region), // 6 + 4 = 10
     ];
 
     {

@@ -203,7 +203,8 @@ fn test_print_operations() {
         value: Attribute::Integer(42),
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     let mut printer = Printer::new();
     printer.print_operation(&ctx, &op_data).unwrap();
@@ -218,7 +219,8 @@ fn test_print_operations() {
         rhs: val2,
     };
 
-    let add_data = add_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let add_data = add_op.into_op_data(&mut ctx, global_region);
     let mut printer = Printer::new();
     printer.print_operation(&ctx, &add_data).unwrap();
     let output = printer.get_output();
@@ -270,7 +272,8 @@ fn test_print_region() {
         value: Attribute::Integer(100),
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
     ctx.get_global_region_mut().add_op(op_data);
 
     let mut printer = Printer::new();

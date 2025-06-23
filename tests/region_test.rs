@@ -117,7 +117,8 @@ fn test_operation_order_preservation() {
             value: Attribute::Integer(i),
         };
 
-        let op_data = const_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = const_op.into_op_data(&mut ctx, global_region);
         let op_ref = {
             let region = ctx.get_global_region_mut();
             region.add_op(op_data)
@@ -240,8 +241,10 @@ fn test_region_with_mixed_content() {
         value: Attribute::Float(3.14),
     };
 
-    let int_op_data = const_int.into_op_data(&mut ctx);
-    let float_op_data = const_float.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let int_op_data = const_int.into_op_data(&mut ctx, global_region);
+    let global_region = ctx.global_region();
+    let float_op_data = const_float.into_op_data(&mut ctx, global_region);
 
     {
         let region = ctx.get_global_region_mut();
@@ -330,7 +333,8 @@ fn test_large_region() {
             value: Attribute::Integer(i as i64),
         };
 
-        let op_data = const_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = const_op.into_op_data(&mut ctx, global_region);
         ctx.get_global_region_mut().add_op(op_data);
     }
 
@@ -391,7 +395,8 @@ fn test_value_with_defining_op() {
         value: Attribute::Integer(100),
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     // Add operation and update defining_op
     let op_ref = {

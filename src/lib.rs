@@ -26,7 +26,8 @@ pub use error::{Error, Result};
 pub use ops::{Op as OpTrait, OpData, OpInfo, OpRef, OpStorage, Opr, Val, Value};
 pub use parser::Parser;
 pub use pass::{
-    apply_patterns_greedy, Pass, PassManager, PassResult, PatternRewriter, RewritePattern,
+    apply_patterns_greedy, apply_patterns_greedy_all_regions, DeadCodeEliminationPass, Pass, 
+    PassManager, PassResult, PatternRewriter, RewritePattern,
 };
 pub use printer::Printer;
 pub use region::{Region, RegionId, RegionManager};

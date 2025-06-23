@@ -24,7 +24,8 @@ fn test_for_loop() {
         body,
     };
 
-    let op_data = for_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = for_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "for");
@@ -54,7 +55,8 @@ fn test_if_op() {
         else_region,
     };
 
-    let op_data = if_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = if_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "if");
@@ -83,7 +85,8 @@ fn test_while_loop() {
         after_region: after,
     };
 
-    let op_data = while_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = while_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "while");
@@ -102,7 +105,8 @@ fn test_yield_op() {
 
     let yield_op = YieldOp { operands: value };
 
-    let op_data = yield_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = yield_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "yield");
@@ -125,7 +129,8 @@ fn test_condition_op() {
         args: arg,
     };
 
-    let op_data = condition_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = condition_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "condition");
@@ -147,7 +152,8 @@ fn test_execute_region() {
         body,
     };
 
-    let op_data = exec_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = exec_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "execute_region");
@@ -174,7 +180,8 @@ fn test_parallel_op() {
         body,
     };
 
-    let op_data = parallel_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = parallel_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "scf");
     assert_eq!(op_data.info.name, "parallel");
@@ -203,7 +210,8 @@ fn test_roundtrip_if_op() {
     };
 
     let if_clone = if_op.clone();
-    let op_data = if_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = if_op.into_op_data(&mut ctx, global_region);
 
     // Convert back
     let recovered = IfOp::from_op_data(&op_data, &ctx);

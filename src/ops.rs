@@ -18,6 +18,13 @@ new_key_type! {
     pub struct Opr;
 }
 
+/// A cross-region value reference that uniquely identifies a value across regions
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ValueRef {
+    pub region: RegionId,
+    pub val: Val,
+}
+
 impl Display for Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.as_ffi() as u32)
@@ -38,7 +45,7 @@ pub struct OpInfo {
 
 pub struct OpData {
     pub info: &'static OpInfo,
-    pub operands: SmallVec<[Val; 2]>,
+    pub operands: SmallVec<[ValueRef; 2]>,
     pub results: SmallVec<[Val; 1]>,
     pub attributes: AttributeMap,
     pub regions: SmallVec<[RegionId; 1]>,

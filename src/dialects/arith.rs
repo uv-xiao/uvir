@@ -1,5 +1,6 @@
 use crate::attribute::Attribute;
 use crate::ops::{Op, OpData, OpInfo, OpStorage, Val};
+use crate::region::RegionId;
 use smallvec::smallvec;
 
 #[derive(Clone, Debug)]
@@ -37,7 +38,7 @@ pub const CONSTANT_OP_INFO: &OpInfo = &OpInfo {
 impl ConstantOp {
     pub const INFO: &'static OpInfo = CONSTANT_OP_INFO;
 
-    pub fn into_op_data(self, ctx: &mut crate::Context) -> OpData {
+    pub fn into_op_data(self, ctx: &mut crate::Context, _region: RegionId) -> OpData {
         let value_key = ctx.intern_string("value");
 
         OpData {
@@ -100,10 +101,13 @@ pub const ADD_OP_INFO: &OpInfo = &OpInfo {
 impl AddOp {
     pub const INFO: &'static OpInfo = ADD_OP_INFO;
 
-    pub fn into_op_data(self, _ctx: &mut crate::Context) -> OpData {
+    pub fn into_op_data(self, ctx: &mut crate::Context, region: RegionId) -> OpData {
         OpData {
             info: Self::INFO,
-            operands: smallvec![self.lhs, self.rhs],
+            operands: smallvec![
+                ctx.make_value_ref(region, self.lhs),
+                ctx.make_value_ref(region, self.rhs)
+            ],
             results: smallvec![self.result],
             attributes: smallvec![],
             regions: smallvec![],
@@ -161,10 +165,13 @@ pub const MUL_OP_INFO: &OpInfo = &OpInfo {
 impl MulOp {
     pub const INFO: &'static OpInfo = MUL_OP_INFO;
 
-    pub fn into_op_data(self, _ctx: &mut crate::Context) -> OpData {
+    pub fn into_op_data(self, ctx: &mut crate::Context, region: RegionId) -> OpData {
         OpData {
             info: Self::INFO,
-            operands: smallvec![self.lhs, self.rhs],
+            operands: smallvec![
+                ctx.make_value_ref(region, self.lhs),
+                ctx.make_value_ref(region, self.rhs)
+            ],
             results: smallvec![self.result],
             attributes: smallvec![],
             regions: smallvec![],

@@ -11,6 +11,10 @@ pub struct Region {
     pub values: SlotMap<Val, Value>,
     pub operations: SlotMap<Opr, OpData>,
     pub op_order: Vec<Opr>,
+    // Region arguments - values that are defined outside but used inside this region
+    pub arguments: Vec<Val>,
+    // Parent region ID for value scoping
+    pub parent: Option<RegionId>,
 }
 
 impl Region {
@@ -19,7 +23,24 @@ impl Region {
             values: SlotMap::with_key(),
             operations: SlotMap::with_key(),
             op_order: Vec::new(),
+            arguments: Vec::new(),
+            parent: None,
         }
+    }
+    
+    // Add an argument to this region
+    pub fn add_argument(&mut self, arg: Val) {
+        self.arguments.push(arg);
+    }
+    
+    // Get region arguments
+    pub fn arguments(&self) -> &[Val] {
+        &self.arguments
+    }
+    
+    // Set parent region for scoping
+    pub fn set_parent(&mut self, parent: RegionId) {
+        self.parent = Some(parent);
     }
 
     pub fn add_op(&mut self, op: OpData) -> Opr {
@@ -104,6 +125,12 @@ impl RegionManager {
 
     pub fn create_region(&mut self) -> RegionId {
         self.regions.insert(Region::new())
+    }
+    
+    pub fn create_region_with_parent(&mut self, parent: RegionId) -> RegionId {
+        let mut region = Region::new();
+        region.set_parent(parent);
+        self.regions.insert(region)
     }
 
     pub fn get_region(&self, id: RegionId) -> Option<&Region> {

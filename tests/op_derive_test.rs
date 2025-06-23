@@ -80,7 +80,8 @@ mod tests {
 
         // Create operation
         let op = SimpleOp { input, output };
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Check basic properties
         assert_eq!(op_data.operands.len(), 1);
@@ -118,7 +119,8 @@ mod tests {
             value: attribute::Attribute::Integer(42),
         };
 
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Check that attributes are included
         assert_eq!(op_data.operands.len(), 2);
@@ -165,7 +167,8 @@ mod tests {
             body: body_region,
         };
 
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Check that region is included
         assert_eq!(op_data.operands.len(), 1);
@@ -202,7 +205,8 @@ mod tests {
             output,
         };
 
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Basic structural verification should succeed
         let verify_result = (SameTypeOp::info().verify)(&op_data);
@@ -221,7 +225,7 @@ mod tests {
             output,
         };
 
-        let bad_op_data = bad_op.into_op_data(&mut ctx);
+        let bad_op_data = bad_op.into_op_data(&mut ctx, global_region);
 
         // Basic verification should still pass
         let basic_verify = (SameTypeOp::info().verify)(&bad_op_data);
@@ -248,7 +252,8 @@ mod tests {
         // Create operation
         let op = SimpleOp { input, output };
         let op_clone = op.clone();
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Convert back
         let op2 = SimpleOp::from_op_data(&op_data, &ctx);
@@ -270,7 +275,8 @@ mod tests {
 
         // Create operation
         let op = SimpleOp { input, output };
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Print to printer
         let mut printer = uvir::printer::Printer::new();
@@ -302,7 +308,8 @@ mod tests {
         };
 
         let op_clone = op.clone();
-        let op_data = op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = op.into_op_data(&mut ctx, global_region);
 
         // Convert back
         let recovered = OpWithAttr::from_op_data(&op_data, &ctx);

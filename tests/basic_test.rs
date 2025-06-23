@@ -64,9 +64,10 @@ fn test_basic_operations() {
     };
 
     // Add operations to the region
-    let const1_op_data = const1_op.into_op_data(&mut ctx);
-    let const2_op_data = const2_op.into_op_data(&mut ctx);
-    let add_op_data = add_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let const1_op_data = const1_op.into_op_data(&mut ctx, global_region);
+    let const2_op_data = const2_op.into_op_data(&mut ctx, global_region);
+    let add_op_data = add_op.into_op_data(&mut ctx, global_region);
 
     {
         let region = ctx.get_global_region_mut();

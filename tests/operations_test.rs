@@ -69,9 +69,10 @@ fn test_operation_creation() {
     };
 
     // Convert to OpData
-    let const1_data = const1.into_op_data(&mut ctx);
-    let _const2_data = const2.into_op_data(&mut ctx);
-    let add_data = add.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let const1_data = const1.into_op_data(&mut ctx, global_region);
+    let _const2_data = const2.into_op_data(&mut ctx, global_region);
+    let add_data = add.into_op_data(&mut ctx, global_region);
 
     // Verify operation metadata
     assert_eq!(const1_data.info.dialect, "arith");
@@ -85,8 +86,8 @@ fn test_operation_creation() {
     assert_eq!(const1_data.results[0], val1);
 
     assert_eq!(add_data.operands.len(), 2);
-    assert_eq!(add_data.operands[0], val1);
-    assert_eq!(add_data.operands[1], val2);
+    assert_eq!(add_data.operands[0].val, val1);
+    assert_eq!(add_data.operands[1].val, val2);
     assert_eq!(add_data.results.len(), 1);
     assert_eq!(add_data.results[0], result);
 }
@@ -138,7 +139,8 @@ fn test_operation_storage() {
         value: Attribute::Integer(123),
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     // Add operation to region and verify
     let op_ref = {
@@ -200,7 +202,8 @@ fn test_multiply_operation() {
         rhs: b,
     };
 
-    let mul_data = mul.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let mul_data = mul.into_op_data(&mut ctx, global_region);
 
     // Verify
     assert_eq!(mul_data.info.dialect, "arith");
@@ -236,7 +239,8 @@ fn test_operation_ordering() {
             value: Attribute::Integer(i as i64),
         };
 
-        let op_data = const_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = const_op.into_op_data(&mut ctx, global_region);
         let op_ref = {
             let region = ctx.get_global_region_mut();
             region.add_op(op_data)
@@ -275,7 +279,8 @@ fn test_operation_attributes() {
         value: Attribute::Integer(42),
     };
 
-    let mut op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let mut op_data = const_op.into_op_data(&mut ctx, global_region);
 
     // Add custom attributes
     let attr_val = Attribute::String(test_value);
@@ -319,7 +324,8 @@ fn test_value_defining_op() {
         value: Attribute::Integer(100),
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     // Add operation and update defining op
     let op_ref = {
@@ -419,11 +425,12 @@ fn test_complex_operation_chain() {
     };
 
     // Convert to OpData
-    let const1_data = const1.into_op_data(&mut ctx);
-    let const2_data = const2.into_op_data(&mut ctx);
-    let const3_data = const3.into_op_data(&mut ctx);
-    let add_data = add.into_op_data(&mut ctx);
-    let mul_data = mul.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let const1_data = const1.into_op_data(&mut ctx, global_region);
+    let const2_data = const2.into_op_data(&mut ctx, global_region);
+    let const3_data = const3.into_op_data(&mut ctx, global_region);
+    let add_data = add.into_op_data(&mut ctx, global_region);
+    let mul_data = mul.into_op_data(&mut ctx, global_region);
 
     // Add all operations
     {
@@ -463,7 +470,8 @@ fn test_operation_null_key_handling() {
         value: Attribute::Integer(0),
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
     let op_ref = {
         let region = ctx.get_global_region_mut();
         region.add_op(op_data)

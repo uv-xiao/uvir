@@ -727,3 +727,422 @@ fn test_numeric_literal_parsing() {
         }
     }
 }
+
+#[test]
+fn test_parse_region_with_arguments() {
+    use uvir::Printer;
+    use uvir::dialects::builtin::integer_type;
+    use uvir::dialects::scf_derive::{ForOp, YieldOp};
+    use uvir::ops::Value;
+    
+    let mut ctx = Context::new();
+    let i32_type = integer_type(&mut ctx, 32, true);
+    let i64_type = integer_type(&mut ctx, 64, true);
+    
+    // Test parsing a region with arguments - simple empty region
+    let region_text = r#"{
+^bb0(%arg0: i32, %arg1: i64):
+}"#;
+
+    let mut parser = Parser::new(region_text.to_string(), &mut ctx).unwrap();
+    let region_id = parser.parse_region().unwrap();
+    
+    // Verify the region was created with arguments
+    let region = ctx.get_region(region_id).unwrap();
+    assert_eq!(region.arguments().len(), 2, "Region should have 2 arguments");
+    
+    // Check argument types
+    let arg0 = region.arguments()[0];
+    let arg0_value = region.get_value(arg0).unwrap();
+    assert!(matches!(ctx.get_type(arg0_value.ty), Some(TypeKind::Integer { width: 32, signed: true })));
+    
+    let arg1 = region.arguments()[1];
+    let arg1_value = region.get_value(arg1).unwrap();
+    assert!(matches!(ctx.get_type(arg1_value.ty), Some(TypeKind::Integer { width: 64, signed: true })));
+    
+    // Test printing the region - should output the same format
+    let mut printer = Printer::new();
+    printer.print_region(&ctx, region_id).unwrap();
+    let output = printer.get_output();
+    
+    println!("Printed region:\n{}", output);
+    
+    // Check that output contains region arguments
+    assert!(output.contains("^bb0("), "Output should contain block label");
+    // The names might be generated differently
+    assert!(output.contains(": i32"), "Output should contain i32 type");
+    assert!(output.contains(": i64"), "Output should contain i64 type");
+}
+
+#[test]
+fn test_parse_print_roundtrip_with_region_args() {
+    use uvir::Printer;
+    use uvir::dialects::builtin::{integer_type, float_type};
+    use uvir::dialects::arith::{AddOp, MulOp, ConstantOp};
+    use uvir::dialects::scf_derive::YieldOp;
+    use uvir::ops::Value;
+    use uvir::attribute::Attribute;
+    
+    let mut ctx = Context::new();
+    let i32_type = integer_type(&mut ctx, 32, true);
+    let f32_type = float_type(&mut ctx, uvir::types::FloatPrecision::Single);
+    
+    // Create a region with mixed type arguments and operations
+    let region_id = ctx.create_region();
+    
+    // Add arguments to the region
+    let arg0_name = ctx.intern_string("x");
+    let arg1_name = ctx.intern_string("y"); 
+    let arg2_name = ctx.intern_string("z");
+    
+    let (arg0, arg1, arg2) = {
+        let region = ctx.get_region_mut(region_id).unwrap();
+        
+        let x = region.add_value(Value {
+            name: Some(arg0_name),
+            ty: i32_type,
+            defining_op: None,
+        });
+        
+        let y = region.add_value(Value {
+            name: Some(arg1_name),
+            ty: i32_type,
+            defining_op: None,
+        });
+        
+        let z = region.add_value(Value {
+            name: Some(arg2_name),
+            ty: f32_type,
+            defining_op: None,
+        });
+        
+        region.add_argument(x);
+        region.add_argument(y);
+        region.add_argument(z);
+        
+        (x, y, z)
+    };
+    
+    // Add some operations that use the arguments
+    let sum_name = ctx.intern_string("sum");
+    let sum_val = {
+        let region = ctx.get_region_mut(region_id).unwrap();
+        region.add_value(Value {
+            name: Some(sum_name),
+            ty: i32_type,
+            defining_op: None,
+        })
+    };
+    
+    let add_op = AddOp {
+        result: sum_val,
+        lhs: arg0,
+        rhs: arg1,
+    };
+    
+    let global_region = ctx.global_region();
+    let add_data = add_op.into_op_data(&mut ctx, global_region);
+    ctx.get_region_mut(region_id).unwrap().add_op(add_data);
+    
+    // Add a yield operation
+    let yield_op = YieldOp {
+        operands: sum_val,
+    };
+    
+    let global_region = ctx.global_region();
+    let yield_data = yield_op.into_op_data(&mut ctx, global_region);
+    ctx.get_region_mut(region_id).unwrap().add_op(yield_data);
+    
+    // Print the region
+    let mut printer = Printer::new();
+    printer.print_region(&ctx, region_id).unwrap();
+    let first_output = printer.get_output();
+    
+    println!("First print:\n{}", first_output);
+    
+    // Parse the printed output
+    let mut parser = Parser::new(first_output.clone(), &mut ctx).unwrap();
+    let parsed_region = parser.parse_region().unwrap();
+    
+    // Print the parsed region
+    let mut printer2 = Printer::new();
+    printer2.print_region(&ctx, parsed_region).unwrap();
+    let second_output = printer2.get_output();
+    
+    println!("Second print (after parsing):\n{}", second_output);
+    
+    // Verify the outputs are equivalent (may have minor formatting differences)
+    assert!(first_output.contains("^bb0("));
+    assert!(second_output.contains("^bb0("));
+    assert!(first_output.contains("%x: i32"));
+    assert!(second_output.contains(": i32")); // Names might differ
+    assert!(first_output.contains("%y: i32"));
+    assert!(second_output.contains(": i32"));
+    assert!(first_output.contains("%z: f32"));
+    assert!(second_output.contains(": f32"));
+    
+    // Verify parsed region has same number of arguments
+    let parsed_region_ref = ctx.get_region(parsed_region).unwrap();
+    assert_eq!(parsed_region_ref.arguments().len(), 3, "Parsed region should have 3 arguments");
+}
+
+#[test]
+fn test_value_scoping_and_def_use() {
+    // This test validates region parsing/printing and basic def-use walking
+    // NOTE: Cross-region value references are not fully supported due to
+    // the current architecture having per-region value namespaces instead
+    // of globally unique values like MLIR
+    use uvir::Printer;
+    use uvir::dialects::builtin::integer_type;
+    use uvir::dialects::arith::{AddOp, MulOp, ConstantOp};
+    use uvir::dialects::scf_derive::{ForOp, YieldOp};
+    use uvir::ops::{Value, OpRef};
+    use uvir::attribute::Attribute;
+    
+    let mut ctx = Context::new();
+    let i32_type = integer_type(&mut ctx, 32, true);
+    
+    // Test MLIR code with nested regions and value scoping:
+    // func.func @test_scoping(%arg0: i32, %arg1: i32) -> i32 {
+    //   %c10 = arith.constant 10 : i32
+    //   %0 = scf.for %i = %arg0 to %arg1 step %c10 iter_args(%iter = %arg0) -> i32 {
+    //     ^bb0(%index: i32, %iter_arg: i32):
+    //       %1 = arith.addi %iter_arg, %index : i32
+    //       %2 = arith.muli %1, %c10 : i32  // Uses %c10 from parent region
+    //       scf.yield %2
+    //   }
+    //   return %0 : i32
+    // }
+    
+    // This is what the test conceptually represents in MLIR:
+    let _mlir_code = r#"func.func @test_scoping(%arg0: i32, %arg1: i32) -> i32 {
+  %c10 = arith.constant {value = 10} : () -> i32
+  %0 = scf.for %arg0 to %arg1 step %c10 {
+    ^bb0(%index: i32, %iter_arg: i32):
+      %1 = arith.addi %iter_arg, %index : (i32, i32) -> i32
+      %2 = arith.muli %1, %c10 : (i32, i32) -> i32
+      scf.yield %2
+  } : i32
+  func.return %0 : i32
+}"#;
+    
+    // For now, let's build this programmatically since full parsing might not be ready
+    // Create the function region
+    let func_region = ctx.create_region();
+    
+    // Add function arguments
+    let arg0_name = ctx.intern_string("arg0");
+    let arg1_name = ctx.intern_string("arg1");
+    
+    let (arg0, arg1) = {
+        let region = ctx.get_region_mut(func_region).unwrap();
+        
+        let a0 = region.add_value(Value {
+            name: Some(arg0_name),
+            ty: i32_type,
+            defining_op: None,
+        });
+        
+        let a1 = region.add_value(Value {
+            name: Some(arg1_name),
+            ty: i32_type,
+            defining_op: None,
+        });
+        
+        region.add_argument(a0);
+        region.add_argument(a1);
+        
+        (a0, a1)
+    };
+    
+    // Create constant in function body
+    let c10_name = ctx.intern_string("c10");
+    let c10_val = {
+        let region = ctx.get_region_mut(func_region).unwrap();
+        region.add_value(Value {
+            name: Some(c10_name),
+            ty: i32_type,
+            defining_op: None,
+        })
+    };
+    
+    let const_op = ConstantOp {
+        result: c10_val,
+        value: Attribute::Integer(10),
+    };
+    
+    let global_region = ctx.global_region();
+    let const_data = const_op.into_op_data(&mut ctx, global_region);
+    let const_opr = ctx.get_region_mut(func_region).unwrap().add_op(const_data);
+    
+    // Set defining op for c10
+    ctx.get_region_mut(func_region).unwrap()
+        .get_value_mut(c10_val).unwrap()
+        .defining_op = Some(OpRef(const_opr));
+    
+    // Create the for loop body region
+    let loop_body = ctx.create_region_with_parent(func_region);
+    
+    // Add loop body arguments (index and iter_arg)
+    let index_name = ctx.intern_string("index");
+    let iter_arg_name = ctx.intern_string("iter_arg");
+    
+    let (index, iter_arg) = {
+        let region = ctx.get_region_mut(loop_body).unwrap();
+        
+        let idx = region.add_value(Value {
+            name: Some(index_name),
+            ty: i32_type,
+            defining_op: None,
+        });
+        
+        let iter = region.add_value(Value {
+            name: Some(iter_arg_name),
+            ty: i32_type,
+            defining_op: None,
+        });
+        
+        region.add_argument(idx);
+        region.add_argument(iter);
+        
+        (idx, iter)
+    };
+    
+    // Create operations in loop body
+    // %1 = arith.addi %iter_arg, %index
+    let v1_name = ctx.intern_string("1");
+    let v1 = {
+        let region = ctx.get_region_mut(loop_body).unwrap();
+        region.add_value(Value {
+            name: Some(v1_name),
+            ty: i32_type,
+            defining_op: None,
+        })
+    };
+    
+    let add_op = AddOp {
+        result: v1,
+        lhs: iter_arg,
+        rhs: index,
+    };
+    
+    let global_region = ctx.global_region();
+    let add_data = add_op.into_op_data(&mut ctx, global_region);
+    let add_opr = ctx.get_region_mut(loop_body).unwrap().add_op(add_data);
+    
+    // Set defining op for v1
+    ctx.get_region_mut(loop_body).unwrap()
+        .get_value_mut(v1).unwrap()
+        .defining_op = Some(OpRef(add_opr));
+    
+    // %2 = arith.muli %1, %1 (simplified - no cross-region reference for now)
+    let v2_name = ctx.intern_string("2");
+    let v2 = {
+        let region = ctx.get_region_mut(loop_body).unwrap();
+        region.add_value(Value {
+            name: Some(v2_name),
+            ty: i32_type,
+            defining_op: None,
+        })
+    };
+    
+    let mul_op = MulOp {
+        result: v2,
+        lhs: v1,
+        rhs: v1, // Use v1 instead of cross-region reference
+    };
+    
+    let global_region = ctx.global_region();
+    let mul_data = mul_op.into_op_data(&mut ctx, global_region);
+    let mul_opr = ctx.get_region_mut(loop_body).unwrap().add_op(mul_data);
+    
+    // Set defining op for v2
+    ctx.get_region_mut(loop_body).unwrap()
+        .get_value_mut(v2).unwrap()
+        .defining_op = Some(OpRef(mul_opr));
+    
+    // scf.yield %2
+    let yield_op = YieldOp {
+        operands: v2,
+    };
+    
+    let global_region = ctx.global_region();
+    let yield_data = yield_op.into_op_data(&mut ctx, global_region);
+    ctx.get_region_mut(loop_body).unwrap().add_op(yield_data);
+    
+    // Create the for loop in the function body
+    let v0_name = ctx.intern_string("0");
+    let v0 = {
+        let region = ctx.get_region_mut(func_region).unwrap();
+        region.add_value(Value {
+            name: Some(v0_name),
+            ty: i32_type,
+            defining_op: None,
+        })
+    };
+    
+    let for_op = ForOp {
+        lower_bound: arg0,
+        upper_bound: arg1,
+        step: c10_val,
+        results: v0,
+        body: loop_body,
+    };
+    
+    let global_region = ctx.global_region();
+    let for_data = for_op.into_op_data(&mut ctx, global_region);
+    let for_opr = ctx.get_region_mut(func_region).unwrap().add_op(for_data);
+    
+    // Set defining op for v0
+    ctx.get_region_mut(func_region).unwrap()
+        .get_value_mut(v0).unwrap()
+        .defining_op = Some(OpRef(for_opr));
+    
+    // Note: Due to per-region value namespaces in the current architecture,
+    // we cannot properly test cross-region value references. This is a limitation
+    // compared to MLIR where values are globally unique.
+    println!("Note: Cross-region value references are not fully supported due to per-region value namespaces");
+    
+    // Test 1: Print the regions to verify structure
+    let mut printer = Printer::new();
+    printer.print_region(&ctx, func_region).unwrap();
+    let func_output = printer.get_output();
+    
+    println!("Function region:\n{}", func_output);
+    
+    // The output should contain the basic structure
+    assert!(func_output.contains("%c10"), "Should contain c10 constant");
+    assert!(func_output.contains("scf.for"), "Should contain for loop");
+    
+    // Test 2: Def-use walking within regions
+    // Find all uses of c10 within func_region
+    let mut c10_uses_in_func = vec![];
+    
+    // Check uses in function region
+    if let Some(region) = ctx.get_region(func_region) {
+        for (opr, op) in region.iter_ops() {
+            if op.operands.iter().any(|vr| vr.val == c10_val) {
+                c10_uses_in_func.push((opr, &op.info.name));
+            }
+        }
+    }
+    
+    // c10 should be used by the for loop as step
+    assert_eq!(c10_uses_in_func.len(), 1, "c10 should have 1 use in func_region");
+    assert!(c10_uses_in_func.iter().any(|(_, name)| **name == "for"), 
+            "c10 should be used by the for loop");
+    
+    // Test 3: Print the loop body region
+    let printed_loop_body = {
+        let mut p = Printer::new();
+        p.print_region(&ctx, loop_body).unwrap();
+        p.get_output()
+    };
+    
+    println!("\nLoop body region:\n{}", printed_loop_body);
+    
+    // The loop body should have the expected operations
+    assert!(printed_loop_body.contains("addi"), "Loop body should contain add operation");
+    assert!(printed_loop_body.contains("muli"), "Loop body should contain multiply operation");
+    assert!(printed_loop_body.contains("yield"), "Loop body should contain yield operation");
+}

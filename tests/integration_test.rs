@@ -83,12 +83,13 @@ fn test_end_to_end_arithmetic_computation() {
     };
 
     // Add operations in order
+    let global_region = ctx.global_region();
     let ops = vec![
-        const1.into_op_data(&mut ctx),
-        const2.into_op_data(&mut ctx),
-        const3.into_op_data(&mut ctx),
-        add.into_op_data(&mut ctx),
-        mul.into_op_data(&mut ctx),
+        const1.into_op_data(&mut ctx, global_region),
+        const2.into_op_data(&mut ctx, global_region),
+        const3.into_op_data(&mut ctx, global_region),
+        add.into_op_data(&mut ctx, global_region),
+        mul.into_op_data(&mut ctx, global_region),
     ];
 
     {
@@ -182,11 +183,12 @@ fn test_mixed_type_operations() {
     };
 
     // Add all operations
+    let global_region = ctx.global_region();
     let ops = vec![
-        const_i32.into_op_data(&mut ctx),
-        const_i64.into_op_data(&mut ctx),
-        const_f32.into_op_data(&mut ctx),
-        const_f64.into_op_data(&mut ctx),
+        const_i32.into_op_data(&mut ctx, global_region),
+        const_i64.into_op_data(&mut ctx, global_region),
+        const_f32.into_op_data(&mut ctx, global_region),
+        const_f64.into_op_data(&mut ctx, global_region),
     ];
 
     {
@@ -235,6 +237,7 @@ fn test_complex_expression_building() {
 
     // Create constants
     let constants = vec![1, 2, 3, 4, 5];
+    let global_region = ctx.global_region();
     let const_ops: Vec<_> = constants
         .iter()
         .enumerate()
@@ -243,7 +246,7 @@ fn test_complex_expression_building() {
                 result: values[i],
                 value: Attribute::Integer(val),
             };
-            const_op.into_op_data(&mut ctx)
+            const_op.into_op_data(&mut ctx, global_region)
         })
         .collect();
 
@@ -260,7 +263,8 @@ fn test_complex_expression_building() {
         lhs: values[0],
         rhs: values[1],
     };
-    let add1_data = add1.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let add1_data = add1.into_op_data(&mut ctx, global_region);
 
     // t2 = t1 * c
     let mul1 = MulOp {
@@ -268,7 +272,7 @@ fn test_complex_expression_building() {
         lhs: values[5],
         rhs: values[2],
     };
-    let mul1_data = mul1.into_op_data(&mut ctx);
+    let mul1_data = mul1.into_op_data(&mut ctx, global_region);
 
     // t3 = d * e
     let mul2 = MulOp {
@@ -276,7 +280,7 @@ fn test_complex_expression_building() {
         lhs: values[3],
         rhs: values[4],
     };
-    let mul2_data = mul2.into_op_data(&mut ctx);
+    let mul2_data = mul2.into_op_data(&mut ctx, global_region);
 
     // result = t2 + t3
     let add2 = AddOp {
@@ -284,7 +288,7 @@ fn test_complex_expression_building() {
         lhs: values[6],
         rhs: values[7],
     };
-    let add2_data = add2.into_op_data(&mut ctx);
+    let add2_data = add2.into_op_data(&mut ctx, global_region);
 
     {
         let region = ctx.get_global_region_mut();
@@ -342,7 +346,8 @@ fn test_operation_with_attributes() {
         value: Attribute::Integer(42),
     };
 
-    let mut op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let mut op_data = const_op.into_op_data(&mut ctx, global_region);
 
     // Add custom attributes
     let custom_attrs = vec![
@@ -405,7 +410,8 @@ fn test_multiple_regions() {
             result: val,
             value: Attribute::Integer(1),
         };
-        let op_data = const_op.into_op_data(&mut ctx);
+        let global_region = ctx.global_region();
+        let op_data = const_op.into_op_data(&mut ctx, global_region);
         ctx.get_global_region_mut().add_op(op_data);
     }
 
@@ -424,7 +430,7 @@ fn test_multiple_regions() {
             result: val,
             value: Attribute::Integer(2),
         };
-        let op_data = const_op.into_op_data(&mut ctx);
+        let op_data = const_op.into_op_data(&mut ctx, region1);
         ctx.get_region_mut(region1).unwrap().add_op(op_data);
     }
 
@@ -443,7 +449,7 @@ fn test_multiple_regions() {
             result: val,
             value: Attribute::Integer(3),
         };
-        let op_data = const_op.into_op_data(&mut ctx);
+        let op_data = const_op.into_op_data(&mut ctx, region2);
         ctx.get_region_mut(region2).unwrap().add_op(op_data);
     }
 
@@ -483,7 +489,8 @@ fn test_value_use_def_chains() {
         result: vals[0],
         value: Attribute::Integer(10),
     };
-    let const_op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let const_op_data = const_op.into_op_data(&mut ctx, global_region);
     let const_ref = ctx.get_global_region_mut().add_op(const_op_data);
     ctx.get_global_region_mut()
         .values
@@ -497,7 +504,7 @@ fn test_value_use_def_chains() {
         lhs: vals[0],
         rhs: vals[0],
     };
-    let add1_data = add1.into_op_data(&mut ctx);
+    let add1_data = add1.into_op_data(&mut ctx, global_region);
     let add1_ref = ctx.get_global_region_mut().add_op(add1_data);
     ctx.get_global_region_mut()
         .values
@@ -511,7 +518,7 @@ fn test_value_use_def_chains() {
         lhs: vals[1],
         rhs: vals[0],
     };
-    let mul_data = mul.into_op_data(&mut ctx);
+    let mul_data = mul.into_op_data(&mut ctx, global_region);
     let mul_ref = ctx.get_global_region_mut().add_op(mul_data);
     ctx.get_global_region_mut()
         .values
@@ -525,7 +532,7 @@ fn test_value_use_def_chains() {
         lhs: vals[2],
         rhs: vals[1],
     };
-    let add2_data = add2.into_op_data(&mut ctx);
+    let add2_data = add2.into_op_data(&mut ctx, global_region);
     let add2_ref = ctx.get_global_region_mut().add_op(add2_data);
     ctx.get_global_region_mut()
         .values
@@ -547,8 +554,8 @@ fn test_value_use_def_chains() {
     // Verify the last operation uses v2 and v1
     let last_op = region.get_op(add2_ref).unwrap();
     assert_eq!(last_op.operands.len(), 2);
-    assert_eq!(last_op.operands[0], vals[2]);
-    assert_eq!(last_op.operands[1], vals[1]);
+    assert_eq!(last_op.operands[0].val, vals[2]);
+    assert_eq!(last_op.operands[1].val, vals[1]);
 }
 
 #[test]
@@ -579,13 +586,14 @@ fn test_large_scale_ir_construction() {
     };
 
     // Create constants for first half
+    let global_region = ctx.global_region();
     let const_ops: Vec<_> = (0..NUM_OPERATIONS)
         .map(|i| {
             let const_op = ConstantOp {
                 result: values[i],
                 value: Attribute::Integer(i as i64),
             };
-            const_op.into_op_data(&mut ctx)
+            const_op.into_op_data(&mut ctx, global_region)
         })
         .collect();
 
@@ -607,7 +615,7 @@ fn test_large_scale_ir_construction() {
                     lhs: values[i / 2],
                     rhs: values[i / 2 + 1],
                 }
-                .into_op_data(&mut ctx)
+                .into_op_data(&mut ctx, global_region)
             } else {
                 // Odd: multiply operation
                 MulOp {
@@ -615,7 +623,7 @@ fn test_large_scale_ir_construction() {
                     lhs: values[i / 2],
                     rhs: values[i / 2 + 1],
                 }
-                .into_op_data(&mut ctx)
+                .into_op_data(&mut ctx, global_region)
             }
         })
         .collect();

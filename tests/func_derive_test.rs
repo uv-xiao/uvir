@@ -21,7 +21,8 @@ fn test_func_definition() {
         sym_visibility,
     };
 
-    let op_data = func_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = func_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "func");
     assert_eq!(op_data.info.name, "func");
@@ -39,7 +40,8 @@ fn test_return_op() {
 
     let return_op = ReturnOp { operands: value };
 
-    let op_data = return_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = return_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "func");
     assert_eq!(op_data.info.name, "return");
@@ -64,7 +66,8 @@ fn test_call_op() {
         callee,
     };
 
-    let op_data = call_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = call_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "func");
     assert_eq!(op_data.info.name, "call");
@@ -90,7 +93,8 @@ fn test_call_indirect_op() {
         results: result,
     };
 
-    let op_data = call_indirect_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = call_indirect_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "func");
     assert_eq!(op_data.info.name, "call_indirect");
@@ -112,7 +116,8 @@ fn test_constant_op() {
         value,
     };
 
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "func");
     assert_eq!(op_data.info.name, "constant");
@@ -138,7 +143,8 @@ fn test_print_func_op() {
         sym_visibility,
     };
 
-    let op_data = func_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = func_op.into_op_data(&mut ctx, global_region);
 
     let mut printer = uvir::printer::Printer::new();
     printer.print_operation(&ctx, &op_data).unwrap();
@@ -165,7 +171,8 @@ fn test_roundtrip_call_op() {
     };
 
     let call_clone = call_op.clone();
-    let op_data = call_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = call_op.into_op_data(&mut ctx, global_region);
 
     // Convert back
     let recovered = CallOp::from_op_data(&op_data, &ctx);

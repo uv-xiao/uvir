@@ -113,6 +113,9 @@ pub enum Token {
     #[token("#")]
     Hash,
 
+    #[token("^")]
+    Caret,
+
     // Keywords (built-in types)
     #[token("i1")]
     I1,
@@ -213,9 +216,6 @@ pub enum Token {
     AffineSet,
 
     // Special symbols
-    #[token("^")]
-    Caret,
-
     #[token("?")]
     Question,
 

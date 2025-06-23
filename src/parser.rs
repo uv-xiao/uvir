@@ -2,7 +2,7 @@ use crate::attribute::{Attribute, AttributeMap};
 use crate::context::Context;
 use crate::error::{Error, Result};
 use crate::lexer::Token;
-use crate::ops::{OpData, OpStorage, Val};
+use crate::ops::{OpData, OpStorage, Val, Value, ValueRef};
 use crate::region::RegionId;
 use crate::types::{FloatPrecision, TypeId, TypeKind};
 use logos::Logos;
@@ -44,6 +44,10 @@ impl<'a> Parser<'a> {
             value_map: HashMap::new(),
             current_region: Some(global_region),
         })
+    }
+    
+    pub fn tokens(&self) -> &[Token] {
+        &self.tokens
     }
 
     pub fn peek(&self) -> Option<&Token> {
@@ -96,41 +100,31 @@ impl<'a> Parser<'a> {
             None => Err(Error::ParseError("Expected integer, found EOF".to_string())),
         }
     }
-
-    pub fn is_at_end(&self) -> bool {
-        self.position >= self.tokens.len()
-    }
-
-    pub fn tokens(&self) -> &[Token] {
-        &self.tokens
-    }
-
-    // Parse a string literal
-    pub fn expect_string(&mut self) -> Result<String> {
-        match self.advance() {
-            Some(Token::StringLiteral(value)) => Ok(value.clone()),
-            Some(token) => Err(Error::ParseError(format!(
-                "Expected string literal, found {:?}",
-                token
-            ))),
-            None => Err(Error::ParseError(
-                "Expected string literal, found EOF".to_string(),
-            )),
-        }
-    }
-
-    // Parse a float literal
+    
     pub fn expect_float(&mut self) -> Result<f64> {
         match self.advance() {
             Some(Token::FloatLiteral(value)) => Ok(*value),
             Some(token) => Err(Error::ParseError(format!(
-                "Expected float literal, found {:?}",
+                "Expected float, found {:?}",
                 token
             ))),
-            None => Err(Error::ParseError(
-                "Expected float literal, found EOF".to_string(),
-            )),
+            None => Err(Error::ParseError("Expected float, found EOF".to_string())),
         }
+    }
+    
+    pub fn expect_string(&mut self) -> Result<String> {
+        match self.advance() {
+            Some(Token::StringLiteral(value)) => Ok(value.clone()),
+            Some(token) => Err(Error::ParseError(format!(
+                "Expected string, found {:?}",
+                token
+            ))),
+            None => Err(Error::ParseError("Expected string, found EOF".to_string())),
+        }
+    }
+
+    pub fn is_at_end(&self) -> bool {
+        self.position >= self.tokens.len()
     }
 
     // Parse a shape like 4x4x? or ?x10
@@ -596,10 +590,70 @@ impl<'a> Parser<'a> {
     pub fn parse_region(&mut self) -> Result<RegionId> {
         self.expect_token(Token::LeftBrace)?;
 
-        // Create a new region
-        let region_id = self.ctx.create_region();
+        // Create a new region with parent
+        let region_id = if let Some(parent) = self.current_region {
+            self.ctx.create_region_with_parent(parent)
+        } else {
+            self.ctx.create_region()
+        };
+        
         let saved_region = self.current_region;
+        let saved_value_map = self.value_map.clone();
         self.current_region = Some(region_id);
+
+        // Check for region arguments in MLIR format: ^bb0(%arg0: i32, %arg1: i64):
+        if matches!(self.peek(), Some(Token::Caret)) {
+            self.advance(); // consume '^'
+            
+            // Parse block label (we ignore it for now since we don't have blocks)
+            let _block_label = self.expect_identifier()?;
+            
+            // Parse optional arguments
+            if matches!(self.peek(), Some(Token::LeftParen)) {
+                self.advance(); // consume '('
+                
+                while !matches!(self.peek(), Some(Token::RightParen)) {
+                    // Parse argument name
+                    let arg_name = match self.advance() {
+                        Some(Token::NamedValueId(name)) => name.clone(),
+                        Some(Token::ValueId(name)) => name.clone(),
+                        _ => return Err(Error::ParseError("Expected argument name".to_string())),
+                    };
+                    
+                    self.expect_token(Token::Colon)?;
+                    
+                    // Parse argument type
+                    let arg_type = self.parse_type()?;
+                    
+                    // Create the argument value
+                    let arg_name_id = self.ctx.intern_string(&arg_name);
+                    let arg_val = {
+                        let region = self.ctx.get_region_mut(region_id).unwrap();
+                        let val = region.add_value(Value {
+                            name: Some(arg_name_id),
+                            ty: arg_type,
+                            defining_op: None,
+                        });
+                        region.add_argument(val);
+                        val
+                    };
+                    
+                    // Add to value map
+                    self.value_map.insert(arg_name, arg_val);
+                    
+                    // Check for comma
+                    if matches!(self.peek(), Some(Token::Comma)) {
+                        self.advance();
+                    } else if !matches!(self.peek(), Some(Token::RightParen)) {
+                        return Err(Error::ParseError("Expected ',' or ')' in argument list".to_string()));
+                    }
+                }
+                
+                self.expect_token(Token::RightParen)?;
+            }
+            
+            self.expect_token(Token::Colon)?;
+        }
 
         // Parse operations in the region
         while !matches!(self.peek(), Some(Token::RightBrace)) {
@@ -612,6 +666,7 @@ impl<'a> Parser<'a> {
 
         self.expect_token(Token::RightBrace)?;
         self.current_region = saved_region;
+        self.value_map = saved_value_map;
 
         Ok(region_id)
     }
@@ -689,7 +744,10 @@ impl<'a> Parser<'a> {
 
             while !matches!(self.peek(), Some(Token::RightParen)) {
                 if self.peek().map_or(false, |t| t.is_value_ref()) {
-                    operands.push(self.parse_value_ref()?);
+                    let val = self.parse_value_ref()?;
+                    // Create ValueRef using current region and parsed Val
+                    let current_region = self.current_region.unwrap_or(self.ctx.global_region());
+                    operands.push(ValueRef { region: current_region, val });
 
                     if matches!(self.peek(), Some(Token::Comma)) {
                         self.advance();
@@ -707,7 +765,10 @@ impl<'a> Parser<'a> {
         } else {
             // Custom syntax: operands without parentheses
             while self.peek().map_or(false, |t| t.is_value_ref()) {
-                operands.push(self.parse_value_ref()?);
+                let val = self.parse_value_ref()?;
+                // Create ValueRef using current region and parsed Val
+                let current_region = self.current_region.unwrap_or(self.ctx.global_region());
+                operands.push(ValueRef { region: current_region, val });
 
                 if matches!(self.peek(), Some(Token::Comma)) {
                     self.advance();

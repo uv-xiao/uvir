@@ -16,7 +16,8 @@ fn test_module_op() {
         sym_name,
     };
 
-    let op_data = module.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = module.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "builtin");
     assert_eq!(op_data.info.name, "module");
@@ -41,7 +42,8 @@ fn test_unrealized_conversion_cast() {
         results: output,
     };
 
-    let op_data = cast_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = cast_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "builtin");
     assert_eq!(op_data.info.name, "unrealized_conversion_cast");
@@ -59,7 +61,8 @@ fn test_constant_op() {
     let value = Attribute::Integer(42);
 
     let const_op = ConstantOp { result, value };
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     assert_eq!(op_data.info.dialect, "builtin");
     assert_eq!(op_data.info.name, "constant");
@@ -79,7 +82,8 @@ fn test_print_module() {
         sym_name,
     };
 
-    let op_data = module.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = module.into_op_data(&mut ctx, global_region);
 
     let mut printer = uvir::printer::Printer::new();
     printer.print_operation(&ctx, &op_data).unwrap();
@@ -103,7 +107,8 @@ fn test_roundtrip_conversion() {
         value: value.clone(),
     };
     let const_clone = const_op.clone();
-    let op_data = const_op.into_op_data(&mut ctx);
+    let global_region = ctx.global_region();
+    let op_data = const_op.into_op_data(&mut ctx, global_region);
 
     // Convert back
     let recovered = ConstantOp::from_op_data(&op_data, &ctx);
